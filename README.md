@@ -12,7 +12,11 @@ crm report pipeline
 ## Install
 
 ```bash
-go install github.com/duetso/crm.cli/cmd/crm@latest
+# Install globally via bun
+bun install -g crm.cli
+
+# Or npx without installing
+bunx crm.cli contact list
 ```
 
 Or build from source:
@@ -20,7 +24,8 @@ Or build from source:
 ```bash
 git clone https://github.com/duetso/crm.cli.git
 cd crm.cli
-go build -o crm ./cmd/crm
+bun install
+bun link
 ```
 
 ## Storage
@@ -641,18 +646,42 @@ Commands that accept an entity reference also accept email (contacts) or domain 
 ## Architecture
 
 ```
-cmd/crm/         CLI entrypoint (cobra)
-internal/
-  store/          SQLite storage layer
-  model/          Entity types and validation
-  search/         FTS5 + vector search
-  report/         Report generation
-  hook/           Hook execution
-  config/         Config loading
-  format/         Output formatting
+src/
+  cli.ts              CLI entrypoint
+  db.ts               Drizzle ORM schema + SQLite setup
+  schemas.ts          Zod validation schemas
+  commands/
+    contact.ts        Contact CRUD
+    company.ts        Company CRUD
+    deal.ts           Deal CRUD + pipeline
+    activity.ts       Activity logging
+    tag.ts            Tag management
+    search.ts         Search + semantic find
+    report.ts         Reports
+    import-export.ts  CSV/JSON import/export
+  lib/
+    format.ts         Output formatting (table, json, csv, tsv, ids)
+    filter.ts         Filter expression parsing
+    hooks.ts          Hook execution
+    config.ts         Config loading (TOML)
+    id.ts             Prefixed ULID generation
+  search/
+    fts.ts            FTS5 keyword search
+    semantic.ts       Local embedding vector search
+test/
+  *.test.ts           Functional CLI tests (bun test)
 ```
 
-The CLI is a thin wrapper around a Go library (`internal/`). Other interfaces (TUI, HTTP API, language bindings) can import the same library.
+The CLI is a thin wrapper around a TypeScript library (`src/`). Other interfaces (TUI, HTTP API, SDK) can import the same modules.
+
+## Stack
+
+- **Runtime:** [Bun](https://bun.sh)
+- **Language:** TypeScript (strict mode)
+- **Database:** SQLite via [libSQL](https://github.com/tursodatabase/libsql) + [Drizzle ORM](https://orm.drizzle.team)
+- **Validation:** [Zod](https://zod.dev)
+- **Linting:** [Biome](https://biomejs.dev) via [Ultracite](https://github.com/haydenbleasel/ultracite)
+- **Testing:** `bun test` (functional tests at the CLI level)
 
 ---
 
