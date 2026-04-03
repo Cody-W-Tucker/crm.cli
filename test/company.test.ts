@@ -37,6 +37,43 @@ describe('company add', () => {
     const result = ctx.runFail('company', 'add', '--domain', 'acme.com')
     expect(result.stderr).toContain('name')
   })
+
+  test('multiple domains on create', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK(
+      'company', 'add', '--name', 'Acme Corp',
+      '--domain', 'acme.com', '--domain', 'acme.co.uk',
+    ).trim()
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('acme.com')
+    expect(show).toContain('acme.co.uk')
+  })
+
+  test('multiple phones on create', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK(
+      'company', 'add', '--name', 'Acme Corp',
+      '--phone', '+1-555-0100', '--phone', '+44-20-7946-0958',
+    ).trim()
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).toContain('+44-20-7946-0958')
+  })
+
+  test('lookup by any domain when company has multiple', () => {
+    const ctx = createTestContext()
+    ctx.runOK(
+      'company', 'add', '--name', 'Acme Corp',
+      '--domain', 'acme.com', '--domain', 'acme.co.uk',
+    )
+
+    const show1 = ctx.runOK('company', 'show', 'acme.com')
+    const show2 = ctx.runOK('company', 'show', 'acme.co.uk')
+    expect(show1).toContain('Acme Corp')
+    expect(show2).toContain('Acme Corp')
+  })
 })
 
 describe('company show', () => {
@@ -98,6 +135,46 @@ describe('company edit', () => {
 
     const show = ctx.runOK('company', 'show', 'acme.com')
     expect(show).toContain('Fintech')
+  })
+
+  test('add domain to existing company', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com').trim()
+    ctx.runOK('company', 'edit', id, '--add-domain', 'acme.co.uk')
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('acme.com')
+    expect(show).toContain('acme.co.uk')
+  })
+
+  test('remove domain from company', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com', '--domain', 'old-acme.com').trim()
+    ctx.runOK('company', 'edit', id, '--rm-domain', 'old-acme.com')
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('acme.com')
+    expect(show).not.toContain('old-acme.com')
+  })
+
+  test('add phone to existing company', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--phone', '+1-555-0100').trim()
+    ctx.runOK('company', 'edit', id, '--add-phone', '+44-20-7946-0958')
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).toContain('+44-20-7946-0958')
+  })
+
+  test('remove phone from company', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--phone', '+1-555-0100', '--phone', '+1-555-OLD').trim()
+    ctx.runOK('company', 'edit', id, '--rm-phone', '+1-555-OLD')
+
+    const show = ctx.runOK('company', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).not.toContain('+1-555-OLD')
   })
 })
 

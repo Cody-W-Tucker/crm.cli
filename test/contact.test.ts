@@ -49,6 +49,51 @@ describe('contact add', () => {
     const result = ctx.runFail('contact', 'add', '--name', 'Jane Smith', '--email', 'jane@acme.com')
     expect(result.stderr).toContain('duplicate')
   })
+
+  test('multiple emails on create', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK(
+      'contact', 'add', '--name', 'Jane Doe',
+      '--email', 'jane@acme.com', '--email', 'jane.doe@gmail.com',
+    ).trim()
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('jane@acme.com')
+    expect(show).toContain('jane.doe@gmail.com')
+  })
+
+  test('multiple phones on create', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK(
+      'contact', 'add', '--name', 'Jane Doe',
+      '--phone', '+1-555-0100', '--phone', '+44-20-7946-0958',
+    ).trim()
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).toContain('+44-20-7946-0958')
+  })
+
+  test('lookup by any email when contact has multiple', () => {
+    const ctx = createTestContext()
+    ctx.runOK(
+      'contact', 'add', '--name', 'Jane Doe',
+      '--email', 'jane@acme.com', '--email', 'jane.doe@gmail.com',
+    )
+
+    const show1 = ctx.runOK('contact', 'show', 'jane@acme.com')
+    const show2 = ctx.runOK('contact', 'show', 'jane.doe@gmail.com')
+    expect(show1).toContain('Jane Doe')
+    expect(show2).toContain('Jane Doe')
+  })
+
+  test('duplicate check applies across all emails', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--email', 'jane@personal.com')
+    // Adding a new contact with jane@personal.com should fail — it belongs to Jane.
+    const result = ctx.runFail('contact', 'add', '--name', 'Other Jane', '--email', 'jane@personal.com')
+    expect(result.stderr).toContain('duplicate')
+  })
 })
 
 describe('contact show', () => {
@@ -203,6 +248,46 @@ describe('contact edit', () => {
     const show = ctx.runOK('contact', 'show', id)
     expect(show).toContain('vip')
     expect(show).not.toContain('lead')
+  })
+
+  test('add email to existing contact', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com').trim()
+    ctx.runOK('contact', 'edit', id, '--add-email', 'jane.doe@gmail.com')
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('jane@acme.com')
+    expect(show).toContain('jane.doe@gmail.com')
+  })
+
+  test('remove email from contact', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--email', 'old@acme.com').trim()
+    ctx.runOK('contact', 'edit', id, '--rm-email', 'old@acme.com')
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('jane@acme.com')
+    expect(show).not.toContain('old@acme.com')
+  })
+
+  test('add phone to existing contact', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--phone', '+1-555-0100').trim()
+    ctx.runOK('contact', 'edit', id, '--add-phone', '+44-20-7946-0958')
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).toContain('+44-20-7946-0958')
+  })
+
+  test('remove phone from contact', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--phone', '+1-555-0100', '--phone', '+1-555-OLD').trim()
+    ctx.runOK('contact', 'edit', id, '--rm-phone', '+1-555-OLD')
+
+    const show = ctx.runOK('contact', 'show', id)
+    expect(show).toContain('+1-555-0100')
+    expect(show).not.toContain('+1-555-OLD')
   })
 })
 

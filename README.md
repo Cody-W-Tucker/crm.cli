@@ -99,20 +99,20 @@ People you interact with.
 
 ```bash
 crm contact add --name "Jane Doe" --email jane@acme.com
-crm contact add --name "Jane Doe" --email jane@acme.com --phone "+1-555-0100" --company Acme --title CTO --source conference --tag hot-lead --tag enterprise
+crm contact add --name "Jane Doe" --email jane@acme.com --email jane.doe@gmail.com --phone "+1-555-0100" --phone "+44-20-7946-0958" --company Acme --title CTO --source conference --tag hot-lead --tag enterprise
 crm contact add --name "Jane Doe" --email jane@acme.com --set linkedin=linkedin.com/in/janedoe --set notes="Met at SaaStr"
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--name` | yes | Full name |
-| `--email` | no | Email address (multiple allowed) |
-| `--phone` | no | Phone number (multiple allowed) |
+| `--email` | no | Email address (repeatable — multiple allowed) |
+| `--phone` | no | Phone number (repeatable — multiple allowed) |
 | `--company` | no | Company name (links to existing or creates stub) |
 | `--title` | no | Job title / role |
 | `--source` | no | Lead source (e.g. `conference`, `inbound`, `referral`) |
-| `--tag` | no | Tag (multiple allowed) |
-| `--set` | no | Custom field as `key=value` (multiple allowed) |
+| `--tag` | no | Tag (repeatable — multiple allowed) |
+| `--set` | no | Custom field as `key=value` (repeatable — multiple allowed) |
 
 Prints the created contact ID to stdout.
 
@@ -151,6 +151,8 @@ Shows full contact details including linked company, deals, activity history, ta
 
 ```bash
 crm contact edit jane@acme.com --name "Jane Smith" --title CEO
+crm contact edit ct_01J8Z... --add-email jane.personal@gmail.com --rm-email old@acme.com
+crm contact edit ct_01J8Z... --add-phone "+44-20-7946-0958" --rm-phone "+1-555-OLD"
 crm contact edit ct_01J8Z... --set linkedin=linkedin.com/in/janesmith
 crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 ```
@@ -158,8 +160,10 @@ crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 | Flag | Description |
 |------|-------------|
 | `--name` | Update name |
-| `--email` | Update/add email |
-| `--phone` | Update/add phone |
+| `--add-email` | Add an email address |
+| `--rm-email` | Remove an email address |
+| `--add-phone` | Add a phone number |
+| `--rm-phone` | Remove a phone number |
 | `--company` | Update company |
 | `--title` | Update title |
 | `--source` | Update source |
@@ -195,17 +199,18 @@ Organizations that contacts belong to.
 
 ```bash
 crm company add --name "Acme Corp" --domain acme.com
-crm company add --name "Acme Corp" --domain acme.com --industry SaaS --size 50-200 --tag enterprise
+crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone "+1-555-0100" --phone "+44-20-7946-0958" --industry SaaS --size 50-200 --tag enterprise
 ```
 
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--name` | yes | Company name |
-| `--domain` | no | Company website domain |
+| `--domain` | no | Website domain (repeatable — multiple allowed) |
+| `--phone` | no | Phone number (repeatable — multiple allowed) |
 | `--industry` | no | Industry category |
 | `--size` | no | Company size / headcount range |
-| `--tag` | no | Tag (multiple allowed) |
-| `--set` | no | Custom field `key=value` |
+| `--tag` | no | Tag (repeatable — multiple allowed) |
+| `--set` | no | Custom field `key=value` (repeatable — multiple allowed) |
 
 #### `crm company list`
 
@@ -228,7 +233,25 @@ Shows company details plus all linked contacts and deals.
 
 #### `crm company edit <id-or-domain>`
 
-Same pattern as `crm contact edit`.
+```bash
+crm company edit acme.com --name "Acme Inc" --industry Fintech
+crm company edit co_01J8Z... --add-domain acme.co.uk --add-phone "+44-20-7946-0958"
+crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-555-9999"
+```
+
+| Flag | Description |
+|------|-------------|
+| `--name` | Update name |
+| `--add-domain` | Add a domain |
+| `--rm-domain` | Remove a domain |
+| `--add-phone` | Add a phone number |
+| `--rm-phone` | Remove a phone number |
+| `--industry` | Update industry |
+| `--size` | Update size |
+| `--set` | Set custom field `key=value` |
+| `--unset` | Remove custom field |
+| `--add-tag` | Add tag |
+| `--rm-tag` | Remove tag |
 
 #### `crm company rm <id-or-domain>`
 
