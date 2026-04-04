@@ -1,8 +1,10 @@
+import { eq, sql } from 'drizzle-orm'
 import type { Command } from 'commander'
 import { getCtx, makeId, now, die, collect, parseKV } from '../lib/helpers'
 import { resolveEntity, resolveContact, resolveCompany, resolveDeal } from '../resolve'
 import { formatOutput, activityToRow, safeJSON } from '../format'
 import { upsertSearchIndex } from '../db'
+import * as schema from '../drizzle-schema'
 
 const VALID_TYPES = ['note', 'call', 'meeting', 'email']
 
@@ -15,10 +17,10 @@ export function registerLogCommand(program: Command) {
     .option('--deal <id>', 'Link to deal')
     .option('--at <date>', 'Custom timestamp')
     .option('--set <kv>', 'Custom field', collect, [])
-    .action((type, ref, body, opts) => {
-      const { db, config } = getCtx()
+    .action(async (type, ref, body, opts) => {
+      const { db, config } = await getCtx()
       if (!VALID_TYPES.includes(type)) die(`Error: invalid activity type "${type}". Must be one of: ${VALID_TYPES.join(', ')}`)
-      const resolved = resolveEntity(db, ref, config)
+      const resolved = await resolveEntity(db, ref, config)
       if (!resolved) die(`Error: entity not found: ${ref}`)
       const id = makeId('ac')
       const ts = opts.at || now()
@@ -30,9 +32,10 @@ export function registerLogCommand(program: Command) {
       else if (resolved.type === 'company') company = resolved.entity.id
       else if (resolved.type === 'deal') deal = resolved.entity.id
       if (opts.deal) deal = opts.deal
-      db.run('INSERT INTO activities (id,type,body,contact,company,deal,custom_fields,created_at) VALUES (?,?,?,?,?,?,?,?)',
-        [id, type, body, contact, company, deal, JSON.stringify(custom), ts])
-      upsertSearchIndex(db, 'activity', id, `${type} ${body}`)
+      await db.insert(schema.activities).values({
+        id, type, body, contact, company, deal, custom_fields: JSON.stringify(custom), created_at: ts
+      })
+      await upsertSearchIndex(db, 'activity', id, `${type} ${body}`)
     })
 }
 
@@ -45,16 +48,16 @@ export function registerActivityCommands(program: Command) {
     .option('--type <type>')
     .option('--since <date>')
     .option('--limit <n>')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let rows = (db.query('SELECT * FROM activities').all() as any[]).map(a => activityToRow(a))
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let rows = (await db.select().from(schema.activities)).map(a => activityToRow(a))
       if (opts.contact) {
-        const ct = resolveContact(db, opts.contact, config)
+        const ct = await resolveContact(db, opts.contact, config)
         if (ct) rows = rows.filter(a => a.contact === ct.id)
         else rows = []
       }
       if (opts.company) {
-        const co = resolveCompany(db, opts.company, config)
+        const co = await resolveCompany(db, opts.company, config)
         if (co) rows = rows.filter(a => a.company === co.id)
         else rows = []
       }

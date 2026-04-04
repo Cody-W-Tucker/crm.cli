@@ -1,6 +1,7 @@
 import type { Command } from 'commander'
 import { getCtx, levenshtein } from '../lib/helpers'
 import { formatOutput, contactToRow, companyToRow, safeJSON } from '../format'
+import * as schema from '../drizzle-schema'
 
 export function registerDupesCommand(program: Command) {
   program.command('dupes')
@@ -8,13 +9,13 @@ export function registerDupesCommand(program: Command) {
     .option('--type <type>', 'Entity type (contact or company)')
     .option('--threshold <n>', 'Similarity threshold 0-1', '0.3')
     .option('--limit <n>', 'Max results')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
       const threshold = Number(opts.threshold)
       let results: any[] = []
 
       if (!opts.type || opts.type === 'contact') {
-        const contacts = db.query('SELECT * FROM contacts').all() as any[]
+        const contacts = await db.select().from(schema.contacts)
         for (let i = 0; i < contacts.length; i++) {
           for (let j = i + 1; j < contacts.length; j++) {
             const reasons = contactDupeReasons(contacts[i], contacts[j])
@@ -32,7 +33,7 @@ export function registerDupesCommand(program: Command) {
       }
 
       if (!opts.type || opts.type === 'company') {
-        const companies = db.query('SELECT * FROM companies').all() as any[]
+        const companies = await db.select().from(schema.companies)
         for (let i = 0; i < companies.length; i++) {
           for (let j = i + 1; j < companies.length; j++) {
             const reasons = companyDupeReasons(companies[i], companies[j])
