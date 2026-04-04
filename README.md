@@ -309,7 +309,7 @@ crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact
 | `--title` | yes | Deal name |
 | `--value` | no | Deal value in dollars (integer) |
 | `--stage` | no | Pipeline stage (default: first configured stage) |
-| `--contact` | no | Link contact by ID or email (multiple allowed) |
+| `--contact` | no | Link contact by ID or email (repeatable — multiple allowed) |
 | `--company` | no | Link company by ID or website |
 | `--expected-close` | no | Expected close date (`YYYY-MM-DD`) |
 | `--probability` | no | Win probability 0-100 |
@@ -345,6 +345,20 @@ Shows full deal details including stage history (timestamps of every stage trans
 
 Same pattern as other entities. `--stage` is NOT used here — use `crm deal move` for stage changes (so transitions are tracked properly).
 
+| Flag | Description |
+|------|-------------|
+| `--title` | Update title |
+| `--value` | Update value |
+| `--add-contact` | Link an additional contact |
+| `--rm-contact` | Unlink a contact |
+| `--company` | Change linked company |
+| `--expected-close` | Update expected close date |
+| `--probability` | Update win probability |
+| `--set` | Set custom field `key=value` |
+| `--unset` | Remove custom field |
+| `--add-tag` | Add tag |
+| `--rm-tag` | Remove tag |
+
 #### `crm deal move <id> --stage <stage>`
 
 ```bash
@@ -353,7 +367,9 @@ crm deal move dl_01J8Z... --stage closed-won --note "Signed annual contract"
 crm deal move dl_01J8Z... --stage closed-lost --reason "Budget cut"
 ```
 
-Records the stage transition with a timestamp. `--note` attaches a note to the transition. `--reason` is specifically for closed-lost deals.
+Records the stage transition with a timestamp by creating a `stage-change` activity entry. This activity includes the old stage, new stage, and timestamp. Stage history is reconstructed from these activity entries — `crm deal show` includes a `stage_history` array with `{stage, at}` pairs. `--note` attaches a note to the transition. `--reason` is specifically for closed-lost deals.
+
+Moving a deal to its current stage is rejected with an error.
 
 #### `crm deal rm <id>`
 
@@ -396,7 +412,7 @@ crm log email jane@acme.com "Sent proposal PDF"
 
 | Argument | Description |
 |----------|-------------|
-| `type` | One of: `note`, `call`, `meeting`, `email` |
+| `type` | One of: `note`, `call`, `meeting`, `email` (plus `stage-change` auto-created by `crm deal move`) |
 | `entity-ref` | Contact ID/email/phone, company ID/website/phone, or deal ID |
 | `note` | Free-text description |
 
@@ -715,7 +731,7 @@ Only a small set of fields are hard-coded per entity — everything else lives i
 |--------|-------------------|-----------------------------------|
 | Contact | `name`, `emails[]`, `phones[]`, `companies[]`, `linkedin`, `x`, `bluesky`, `telegram`, `tags[]` | title, source, notes, ... |
 | Company | `name`, `websites[]`, `phones[]`, `tags[]` | industry, size, founded, ... |
-| Deal | `title`, `value`, `stage`, `contacts[]`, `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
+| Deal | `title`, `value`, `stage`, `contacts[]` (multi), `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
 | Activity | `type`, `entity_ref`, `note`, `deal`, `at` | duration, outcome, attendees, ... |
 
 Hard-coded fields drive business logic (entity resolution, pipeline math, relationships, reports). Custom fields are metadata — flexible, filterable, but no special behavior.
@@ -1148,6 +1164,65 @@ search_limit = 20               # max results for search/ virtual files
 - **Validation:** [Zod](https://zod.dev)
 - **Linting:** [Biome](https://biomejs.dev) via [Ultracite](https://github.com/haydenbleasel/ultracite)
 - **Testing:** `bun test` (functional tests at the CLI level)
+
+---
+
+## Distribution
+
+### Package Manager
+
+```bash
+# Install globally via bun (recommended)
+bun install -g crm.cli
+
+# Or via npm
+npm install -g crm.cli
+
+# Or use without installing
+bunx crm.cli contact list
+npx crm.cli contact list
+```
+
+### Compiled Binary
+
+Pre-built binaries are available on [GitHub Releases](https://github.com/dzhng/crm.cli/releases), compiled via `bun build --compile` for:
+
+- Linux x64
+- Linux arm64
+- macOS x64 (Intel)
+- macOS arm64 (Apple Silicon)
+
+```bash
+# Download and install the latest release
+curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+```
+
+### Install Script
+
+The install script (`install.sh`) handles:
+
+1. Detecting your platform (Linux/macOS, x64/arm64)
+2. Downloading the correct binary from GitHub Releases
+3. Installing it to `~/.local/bin` (or `/usr/local/bin` with sudo)
+4. Optionally installing FUSE dependencies if not present:
+   - Linux: `libfuse3-dev` via apt/yum/pacman
+   - macOS: `macfuse` via Homebrew
+5. Optionally installing the ONNX runtime for semantic search (`crm find`)
+
+```bash
+# Full install with all optional dependencies
+curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh -s -- --all
+
+# Binary only (no FUSE, no semantic search)
+curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh -s -- --minimal
+```
+
+### CI/CD
+
+GitHub Actions pipeline:
+
+- **On push to main:** Run all tests via `bun test`
+- **On tag (`v*`):** Build binaries for all platforms, publish to npm, create GitHub Release with assets
 
 ---
 

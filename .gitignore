@@ -9,3 +9,7 @@ Thumbs.db
 *.swp
 
 ~/.crm/
+
+# FUSE smoke test artifacts
+test/fuse-smoke/hello_fuse
+test/fuse-smoke/mnt/

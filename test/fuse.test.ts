@@ -738,6 +738,134 @@ describe('fuse: write validation', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Error states
+// ---------------------------------------------------------------------------
+
+describe('fuse: error states', () => {
+  test('reading nonexistent contact file throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'contacts', 'nonexistent.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reading nonexistent _by-email symlink throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'contacts', '_by-email', 'nobody@nowhere.com.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reading nonexistent _by-phone symlink throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'contacts', '_by-phone', '+19999999999.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reading nonexistent company file throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'companies', 'nonexistent.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reading nonexistent deal file throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'deals', 'nonexistent.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reading nonexistent report file throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readFileSync(join(ctx.mountPoint, 'reports', 'nonexistent.json'), 'utf-8')
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('listing nonexistent _by-company subdirectory throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readdirSync(join(ctx.mountPoint, 'contacts', '_by-company', 'nonexistent-corp'))
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('listing nonexistent _by-tag subdirectory throws ENOENT', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        readdirSync(join(ctx.mountPoint, 'contacts', '_by-tag', 'nonexistent-tag'))
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('writing to nonexistent top-level directory throws', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      expect(() => {
+        writeFileSync(join(ctx.mountPoint, 'bogus', 'new.json'), JSON.stringify({ name: 'test' }))
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('deleting from _by-* index directories is not allowed', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+
+      expect(() => {
+        unlinkSync(join(ctx.mountPoint, 'contacts', '_by-email', 'jane@acme.com.json'))
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Phone normalization in FUSE
 // ---------------------------------------------------------------------------
 

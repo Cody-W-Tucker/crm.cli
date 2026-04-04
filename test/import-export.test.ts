@@ -143,6 +143,107 @@ describe('export', () => {
   })
 })
 
+describe('import edge cases', () => {
+  test('CSV with missing columns treats them as empty', () => {
+    const ctx = createTestContext()
+    // CSV has name but no email, phone, etc.
+    const csv = `name\nJane Doe\nBob Smith\n`
+    const csvPath = join(ctx.dir, 'minimal.csv')
+    writeFileSync(csvPath, csv)
+
+    ctx.runOK('import', 'contacts', csvPath)
+
+    const contacts = ctx.runJSON<unknown[]>('contact', 'list', '--format', 'json')
+    expect(contacts).toHaveLength(2)
+  })
+
+  test('CSV with extra columns maps to custom fields', () => {
+    const ctx = createTestContext()
+    const csv = `name,email,department,hire_date\nJane,jane@acme.com,Engineering,2025-01-15\n`
+    const csvPath = join(ctx.dir, 'extra.csv')
+    writeFileSync(csvPath, csv)
+
+    ctx.runOK('import', 'contacts', csvPath)
+
+    const show = ctx.runOK('contact', 'show', 'jane@acme.com')
+    expect(show).toContain('department')
+    expect(show).toContain('Engineering')
+    expect(show).toContain('hire_date')
+  })
+
+  test('CSV with phone normalization on import', () => {
+    const ctx = createTestContext()
+    const csv = `name,phone\nJane,+1-212-555-1234\nBob,(212) 555-6789\n`
+    const csvPath = join(ctx.dir, 'phones.csv')
+    writeFileSync(csvPath, csv)
+
+    ctx.runOK('import', 'contacts', csvPath)
+
+    const contacts = ctx.runJSON<Array<{ phones: string[] }>>('contact', 'list', '--format', 'json')
+    expect(contacts).toHaveLength(2)
+    // Phones should be stored as E.164
+    for (const c of contacts) {
+      if (c.phones?.length > 0) {
+        expect(c.phones[0]).toMatch(/^\+\d+$/)
+      }
+    }
+  })
+
+  test('import duplicate rows are skipped by default', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com')
+
+    const csv = `name,email\nJane Doe,jane@acme.com\nBob,bob@acme.com\n`
+    const csvPath = join(ctx.dir, 'dupes.csv')
+    writeFileSync(csvPath, csv)
+
+    const out = ctx.runOK('import', 'contacts', csvPath)
+    expect(out).toContain('skip') // should report skipped
+
+    const contacts = ctx.runJSON<unknown[]>('contact', 'list', '--format', 'json')
+    expect(contacts).toHaveLength(2) // original Jane + new Bob
+  })
+
+  test('import from stdin', () => {
+    const ctx = createTestContext()
+    const json = JSON.stringify([
+      { name: 'Stdin Jane', email: 'stdin@acme.com' },
+    ])
+
+    const proc = Bun.spawnSync(
+      ['bun', 'run', join(import.meta.dir, '..', 'src', 'cli.ts'), '--db', ctx.dbPath, 'import', 'contacts', '-'],
+      { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' }, stdin: Buffer.from(json) },
+    )
+    expect(proc.exitCode).toBe(0)
+
+    const contacts = ctx.runJSON<unknown[]>('contact', 'list', '--format', 'json')
+    expect(contacts).toHaveLength(1)
+  })
+
+  test('import empty file produces no records', () => {
+    const ctx = createTestContext()
+    const csvPath = join(ctx.dir, 'empty.csv')
+    writeFileSync(csvPath, 'name,email\n')
+
+    ctx.runOK('import', 'contacts', csvPath)
+
+    const contacts = ctx.runJSON<unknown[]>('contact', 'list', '--format', 'json')
+    expect(contacts).toHaveLength(0)
+  })
+
+  test('import companies with website normalization', () => {
+    const ctx = createTestContext()
+    const csv = `name,website\nAcme,https://www.ACME.COM\nGlobex,http://globex.com/\n`
+    const csvPath = join(ctx.dir, 'companies-norm.csv')
+    writeFileSync(csvPath, csv)
+
+    ctx.runOK('import', 'companies', csvPath)
+
+    const companies = ctx.runJSON<Array<{ website: string }>>('company', 'list', '--format', 'json')
+    expect(companies).toHaveLength(2)
+  })
+})
+
 describe('roundtrip', () => {
   test('export then import preserves data', () => {
     const ctx = createTestContext()

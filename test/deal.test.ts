@@ -38,6 +38,72 @@ describe('deal add', () => {
     expect(show).toContain('q2')
   })
 
+  test('supports multiple contacts', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+
+    const id = ctx.runOK(
+      'deal', 'add',
+      '--title', 'Multi-Stakeholder Deal',
+      '--contact', 'jane@acme.com',
+      '--contact', 'bob@acme.com',
+    ).trim()
+
+    const show = ctx.runOK('deal', 'show', id)
+    expect(show).toContain('jane@acme.com')
+    expect(show).toContain('bob@acme.com')
+  })
+
+  test('multiple contacts in JSON output', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+
+    const id = ctx.runOK(
+      'deal', 'add',
+      '--title', 'Multi Deal',
+      '--contact', 'jane@acme.com',
+      '--contact', 'bob@acme.com',
+    ).trim()
+
+    const deal = ctx.runJSON<{ contacts: Array<{ name: string }> }>('deal', 'show', id, '--format', 'json')
+    expect(deal.contacts).toHaveLength(2)
+  })
+
+  test('filter deals by any linked contact', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+    ctx.runOK('deal', 'add', '--title', 'Deal 1', '--contact', 'jane@acme.com', '--contact', 'bob@acme.com')
+    ctx.runOK('deal', 'add', '--title', 'Deal 2', '--contact', 'bob@acme.com')
+
+    const janeDeals = ctx.runJSON<unknown[]>('deal', 'list', '--contact', 'jane@acme.com', '--format', 'json')
+    expect(janeDeals).toHaveLength(1)
+
+    const bobDeals = ctx.runJSON<unknown[]>('deal', 'list', '--contact', 'bob@acme.com', '--format', 'json')
+    expect(bobDeals).toHaveLength(2)
+  })
+
+  test('edit deal to add/remove contacts', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Alice', '--email', 'alice@acme.com')
+
+    const id = ctx.runOK('deal', 'add', '--title', 'Edit Deal', '--contact', 'jane@acme.com').trim()
+    ctx.runOK('deal', 'edit', id, '--add-contact', 'bob@acme.com')
+
+    let show = ctx.runOK('deal', 'show', id)
+    expect(show).toContain('jane@acme.com')
+    expect(show).toContain('bob@acme.com')
+
+    ctx.runOK('deal', 'edit', id, '--rm-contact', 'jane@acme.com')
+    show = ctx.runOK('deal', 'show', id)
+    expect(show).not.toContain('jane@acme.com')
+    expect(show).toContain('bob@acme.com')
+  })
+
   test('fails without --title', () => {
     const ctx = createTestContext()
     const result = ctx.runFail('deal', 'add', '--value', '10000')
@@ -151,6 +217,72 @@ describe('deal move', () => {
     expect(show).toContain('closed-lost')
     expect(show).toContain('Budget cut')
   })
+
+  test('creates stage-change activity with timestamp', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'Tracked Deal', '--stage', 'lead').trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+
+    const activities = ctx.runJSON<Array<{ type: string; body: string; created_at: string }>>('activity', 'list', '--deal', id, '--format', 'json')
+    const stageChange = activities.find((a) => a.type === 'stage-change')
+    expect(stageChange).toBeDefined()
+    expect(stageChange!.body).toContain('lead')
+    expect(stageChange!.body).toContain('qualified')
+    expect(stageChange!.created_at).toBeTruthy()
+  })
+
+  test('multiple moves create multiple stage-change activities with timestamps', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'Multi Move', '--stage', 'lead').trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+    ctx.runOK('deal', 'move', id, '--stage', 'proposal')
+    ctx.runOK('deal', 'move', id, '--stage', 'closed-won', '--note', 'Signed')
+
+    const activities = ctx.runJSON<Array<{ type: string; body: string; created_at: string }>>('activity', 'list', '--deal', id, '--type', 'stage-change', '--format', 'json')
+    expect(activities).toHaveLength(3)
+    // Each activity should have a timestamp
+    for (const a of activities) {
+      expect(a.created_at).toBeTruthy()
+    }
+  })
+
+  test('stage-change activity includes note when provided', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'Noted Deal', '--stage', 'lead').trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'closed-won', '--note', 'Annual contract signed')
+
+    const activities = ctx.runJSON<Array<{ type: string; body: string }>>('activity', 'list', '--deal', id, '--type', 'stage-change', '--format', 'json')
+    expect(activities).toHaveLength(1)
+    expect(activities[0].body).toContain('Annual contract signed')
+  })
+
+  test('stage history is reconstructed from activities', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'History Deal', '--stage', 'lead').trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+    ctx.runOK('deal', 'move', id, '--stage', 'proposal')
+
+    // Deal show should include stage history with timestamps from activity log
+    const deal = ctx.runJSON<{ stage_history: Array<{ stage: string; at: string }> }>('deal', 'show', id, '--format', 'json')
+    expect(deal.stage_history.length).toBeGreaterThanOrEqual(3) // lead (initial) + qualified + proposal
+    for (const entry of deal.stage_history) {
+      expect(entry.stage).toBeTruthy()
+      expect(entry.at).toBeTruthy()
+    }
+  })
+
+  test('move to same stage is rejected', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'Same Stage', '--stage', 'lead').trim()
+    const result = ctx.runFail('deal', 'move', id, '--stage', 'lead')
+    expect(result.stderr).toContain('already')
+  })
+
+  test('move nonexistent deal fails', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'move', 'dl_nonexistent', '--stage', 'qualified')
+    expect(result.exitCode).not.toBe(0)
+  })
 })
 
 describe('deal edit', () => {
@@ -198,6 +330,77 @@ describe('pipeline', () => {
     expect(pipeline[0]).toHaveProperty('value')
   })
 
+})
+
+describe('deal errors', () => {
+  test('add with nonexistent contact reference fails', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'add', '--title', 'Bad Deal', '--contact', 'nobody@nowhere.com')
+    expect(result.stderr).not.toBe('')
+  })
+
+  test('add with nonexistent company reference fails', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'add', '--title', 'Bad Deal', '--company', 'no-such-company.com')
+    expect(result.stderr).not.toBe('')
+  })
+
+  test('show nonexistent deal fails', () => {
+    const ctx = createTestContext()
+    ctx.runFail('deal', 'show', 'dl_nonexistent')
+  })
+
+  test('edit nonexistent deal fails', () => {
+    const ctx = createTestContext()
+    ctx.runFail('deal', 'edit', 'dl_nonexistent', '--title', 'New Title')
+  })
+
+  test('rm nonexistent deal fails', () => {
+    const ctx = createTestContext()
+    ctx.runFail('deal', 'rm', 'dl_nonexistent', '--force')
+  })
+
+  test('invalid probability rejects', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'add', '--title', 'Bad Prob', '--probability', '150')
+    expect(result.stderr).toContain('probability')
+  })
+
+  test('negative value rejects', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'add', '--title', 'Negative', '--value', '-1000')
+    expect(result.stderr).toContain('value')
+  })
+
+  test('invalid expected-close date rejects', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail('deal', 'add', '--title', 'Bad Date', '--expected-close', 'not-a-date')
+    expect(result.stderr).not.toBe('')
+  })
+
+  test('delete contact sets deal contacts to null', () => {
+    const ctx = createTestContext()
+    const contactId = ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com').trim()
+    const dealId = ctx.runOK('deal', 'add', '--title', 'Orphan Deal', '--contact', 'jane@acme.com').trim()
+
+    ctx.runOK('contact', 'rm', contactId, '--force')
+
+    // Deal should still exist but contact reference should be cleared
+    const deal = ctx.runJSON<{ contacts: unknown[] }>('deal', 'show', dealId, '--format', 'json')
+    expect(deal.contacts).toHaveLength(0)
+  })
+
+  test('delete company sets deal company to null', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com')
+    const dealId = ctx.runOK('deal', 'add', '--title', 'Orphan Deal', '--company', 'acme.com').trim()
+
+    const companies = ctx.runJSON<Array<{ id: string }>>('company', 'list', '--format', 'json')
+    ctx.runOK('company', 'rm', companies[0].id, '--force')
+
+    const deal = ctx.runJSON<{ company: unknown }>('deal', 'show', dealId, '--format', 'json')
+    expect(deal.company).toBeNull()
+  })
 })
 
 describe('deal show', () => {
