@@ -341,30 +341,39 @@ describe('company merge', () => {
 
   test('merge relinks contacts to surviving company', () => {
     const ctx = createTestContext()
-    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
-    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/ventures').trim()
-    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp')
-    ctx.runOK('contact', 'add', '--name', 'John', '--email', 'john@acme.co.uk', '--company', 'Acme Inc')
+    const id1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const id2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/ventures').trim()
+    const contact = ctx.runOK('contact', 'add', '--name', 'John', '--email', 'john@acme.co.uk', '--company', 'Acme Inc').trim()
 
-    ctx.runOK('company', 'merge', co1, co2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
 
-    const show = ctx.runOK('company', 'show', co1)
-    expect(show).toContain('Jane')
-    expect(show).toContain('John')
+    const contactShow = ctx.runOK('contact', 'show', contact)
+    expect(contactShow).toContain('Acme Corp')
   })
 
   test('merge relinks deals to surviving company', () => {
     const ctx = createTestContext()
-    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
-    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/ventures').trim()
-    ctx.runOK('deal', 'add', '--title', 'Deal A', '--company', 'acme.com')
-    ctx.runOK('deal', 'add', '--title', 'Deal B', '--company', 'acme.com/ventures')
+    const id1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const id2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/ventures').trim()
+    const deal = ctx.runOK('deal', 'add', '--title', 'Deal B', '--company', id2).trim()
 
-    ctx.runOK('company', 'merge', co1, co2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
 
-    const show = ctx.runOK('company', 'show', co1)
-    expect(show).toContain('Deal A')
-    expect(show).toContain('Deal B')
+    const dealShow = ctx.runOK('deal', 'show', deal)
+    expect(dealShow).toContain(id1)
+    expect(dealShow).not.toContain(id2)
+  })
+
+  test('merge transfers activities to surviving company', () => {
+    const ctx = createTestContext()
+    const id1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const id2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/ventures').trim()
+    ctx.runOK('log', 'note', 'acme.com/ventures', 'Activity on the old company')
+
+    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+
+    const activities = ctx.runJSON<unknown[]>('activity', 'list', '--company', 'acme.com', '--format', 'json')
+    expect(activities).toHaveLength(1)
   })
 
   test('merge combines custom fields', () => {
@@ -443,20 +452,3 @@ describe('company auto-creation', () => {
   })
 })
 
-describe('company merge', () => {
-  test('relinks contacts and deals from second company to first', () => {
-    const ctx = createTestContext()
-    const first = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
-    const second = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.ai').trim()
-    const contact = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.ai', '--company', 'Acme Inc').trim()
-    const deal = ctx.runOK('deal', 'add', '--title', 'Expansion', '--company', second).trim()
-
-    ctx.runOK('company', 'merge', first, second, '--keep-first')
-
-    const contactShow = ctx.runOK('contact', 'show', contact)
-    expect(contactShow).toContain('Acme Corp')
-    const dealShow = ctx.runOK('deal', 'show', deal)
-    expect(dealShow).toContain(first)
-    expect(dealShow).not.toContain(second)
-  })
-})
