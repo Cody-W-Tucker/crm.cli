@@ -187,7 +187,7 @@ Prompts for confirmation unless `--force` is passed. Removes the contact and unl
 crm contact merge ct_01J8Z... ct_02K9A...
 ```
 
-Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, tags, custom fields, and activity history are combined. Deals linked to the second contact are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
+Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, tags, custom fields, and activity history are combined. Deals and company links on the second contact are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
 
 ---
 

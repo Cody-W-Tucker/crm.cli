@@ -442,3 +442,21 @@ describe('company auto-creation', () => {
     expect(companies).toHaveLength(1)
   })
 })
+
+describe('company merge', () => {
+  test('relinks contacts and deals from second company to first', () => {
+    const ctx = createTestContext()
+    const first = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com').trim()
+    const second = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.ai').trim()
+    const contact = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.ai', '--company', 'Acme Inc').trim()
+    const deal = ctx.runOK('deal', 'add', '--title', 'Expansion', '--company', second).trim()
+
+    ctx.runOK('company', 'merge', first, second, '--keep-first')
+
+    const contactShow = ctx.runOK('contact', 'show', contact)
+    expect(contactShow).toContain('Acme Corp')
+    const dealShow = ctx.runOK('deal', 'show', deal)
+    expect(dealShow).toContain(first)
+    expect(dealShow).not.toContain(second)
+  })
+})

@@ -499,3 +499,30 @@ describe('contact merge', () => {
     expect(show).toContain('linkedin.com/in/jdoe')
   })
 })
+
+describe('contact merge', () => {
+  test('relinks deals from second contact to first', () => {
+    const ctx = createTestContext()
+    const first = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com').trim()
+    const second = ctx.runOK('contact', 'add', '--name', 'J. Doe', '--email', 'jane.personal@gmail.com').trim()
+    const deal = ctx.runOK('deal', 'add', '--title', 'Big Deal', '--contact', second).trim()
+
+    ctx.runOK('contact', 'merge', first, second, '--keep-first')
+
+    const show = ctx.runOK('deal', 'show', deal)
+    expect(show).toContain(first)
+    expect(show).not.toContain(second)
+  })
+
+  test('preserves company link when merging duplicate contacts', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    const first = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--company', 'Acme Corp').trim()
+    const second = ctx.runOK('contact', 'add', '--name', 'J. Doe', '--email', 'jane.personal@gmail.com').trim()
+
+    ctx.runOK('contact', 'merge', first, second, '--keep-first')
+
+    const show = ctx.runOK('contact', 'show', first)
+    expect(show).toContain('Acme Corp')
+  })
+})

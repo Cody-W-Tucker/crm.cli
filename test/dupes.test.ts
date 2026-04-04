@@ -44,7 +44,6 @@ describe('dupes', () => {
     expect(out).toContain('Jane Doe')
     expect(out).toContain('Jane D')
   })
-}
 
   test('finds likely duplicate companies by similar website hosts even with paths', () => {
     const ctx = createTestContext()
@@ -65,5 +64,4 @@ describe('dupes', () => {
     expect(out).toContain('Jane Doe')
     expect(out).toContain('Jane D')
   })
-
-}
+})
