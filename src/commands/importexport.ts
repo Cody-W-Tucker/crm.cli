@@ -1,10 +1,13 @@
+import { eq, sql } from 'drizzle-orm'
 import { readFileSync } from 'node:fs'
 import type { Command } from 'commander'
 import { getCtx, makeId, now, die, collect, parseCSV, buildContactSearch, buildCompanySearch, buildDealSearch } from '../lib/helpers'
 import { resolveContact, resolveCompany } from '../resolve'
 import { formatOutput, contactToRow, companyToRow, dealToRow, activityToRow, safeJSON } from '../format'
 import { upsertSearchIndex } from '../db'
+import type { DB } from '../db'
 import { tryNormalizePhone, normalizeWebsite } from '../normalize'
+import * as schema from '../drizzle-schema'
 
 const CONTACT_FIELDS = new Set(['name', 'email', 'emails', 'phone', 'phones', 'company', 'companies', 'tags', 'linkedin', 'x', 'bluesky', 'telegram'])
 const COMPANY_FIELDS = new Set(['name', 'website', 'websites', 'phone', 'phones', 'tags'])
@@ -14,8 +17,8 @@ export function registerImportExportCommands(program: Command) {
   const imp = program.command('import').description('Import data')
 
   imp.command('contacts').argument('<file>').option('--dry-run').option('--skip-errors').option('--update')
-    .action((file, opts) => {
-      const { db, config } = getCtx()
+    .action(async (file, opts) => {
+      const { db, config } = await getCtx()
       const records = readRecords(file)
       let imported = 0, skipped = 0, errors = 0
       for (const rec of records) {
@@ -32,7 +35,7 @@ export function registerImportExportCommands(program: Command) {
           // Check for existing by email
           let existing: any = null
           for (const e of emails) {
-            existing = findContactByEmail(db, e)
+            existing = await findContactByEmail(db, e)
             if (existing) break
           }
           if (existing && !opts.update) { skipped++; continue }
@@ -41,10 +44,12 @@ export function registerImportExportCommands(program: Command) {
             for (const [k, v] of Object.entries(rec)) {
               if (!CONTACT_FIELDS.has(k) && v) custom[k] = v
             }
-            db.run('UPDATE contacts SET name=?,custom_fields=?,updated_at=? WHERE id=?',
-              [name || existing.name, JSON.stringify(custom), now(), existing.id])
-            const row = db.query('SELECT * FROM contacts WHERE id = ?').get(existing.id)
-            upsertSearchIndex(db, 'contact', existing.id, buildContactSearch(row))
+            await db.update(schema.contacts).set({
+              name: name || existing.name, custom_fields: JSON.stringify(custom), updated_at: now()
+            }).where(eq(schema.contacts.id, existing.id))
+            const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, existing.id))
+            const row = results[0]
+            await upsertSearchIndex(db, 'contact', existing.id, buildContactSearch(row))
             imported++
             continue
           }
@@ -56,10 +61,15 @@ export function registerImportExportCommands(program: Command) {
             if (!CONTACT_FIELDS.has(k) && v) custom[k] = v
           }
           const social: Record<string, string | null> = { linkedin: rec.linkedin || null, x: rec.x || null, bluesky: rec.bluesky || null, telegram: rec.telegram || null }
-          db.run('INSERT INTO contacts (id,name,emails,phones,companies,linkedin,x,bluesky,telegram,tags,custom_fields,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-            [id, name, JSON.stringify(emails), JSON.stringify(phones), JSON.stringify(companies), social.linkedin, social.x, social.bluesky, social.telegram, JSON.stringify(tags), JSON.stringify(custom), n, n])
-          const row = db.query('SELECT * FROM contacts WHERE id = ?').get(id)
-          upsertSearchIndex(db, 'contact', id, buildContactSearch(row))
+          await db.insert(schema.contacts).values({
+            id, name, emails: JSON.stringify(emails), phones: JSON.stringify(phones),
+            companies: JSON.stringify(companies), linkedin: social.linkedin, x: social.x,
+            bluesky: social.bluesky, telegram: social.telegram,
+            tags: JSON.stringify(tags), custom_fields: JSON.stringify(custom), created_at: n, updated_at: n
+          })
+          const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, id))
+          const row = results[0]
+          await upsertSearchIndex(db, 'contact', id, buildContactSearch(row))
           imported++
         } catch (e: any) {
           if (opts.skipErrors) { errors++; continue }
@@ -70,8 +80,8 @@ export function registerImportExportCommands(program: Command) {
     })
 
   imp.command('companies').argument('<file>').option('--dry-run').option('--skip-errors')
-    .action((file, opts) => {
-      const { db, config } = getCtx()
+    .action(async (file, opts) => {
+      const { db, config } = await getCtx()
       const records = readRecords(file)
       let imported = 0
       for (const rec of records) {
@@ -92,10 +102,13 @@ export function registerImportExportCommands(program: Command) {
           if (opts.dryRun) { console.log(`[dry-run] ${rec.name}`); imported++; continue }
           const id = makeId('co')
           const n = now()
-          db.run('INSERT INTO companies (id,name,websites,phones,tags,custom_fields,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)',
-            [id, rec.name, JSON.stringify(websites), JSON.stringify(phones), JSON.stringify(tags), JSON.stringify(custom), n, n])
-          const row = db.query('SELECT * FROM companies WHERE id = ?').get(id)
-          upsertSearchIndex(db, 'company', id, buildCompanySearch(row))
+          await db.insert(schema.companies).values({
+            id, name: rec.name, websites: JSON.stringify(websites), phones: JSON.stringify(phones),
+            tags: JSON.stringify(tags), custom_fields: JSON.stringify(custom), created_at: n, updated_at: n
+          })
+          const results = await db.select().from(schema.companies).where(eq(schema.companies.id, id))
+          const row = results[0]
+          await upsertSearchIndex(db, 'company', id, buildCompanySearch(row))
           imported++
         } catch (e: any) {
           if (opts.skipErrors) continue
@@ -106,8 +119,8 @@ export function registerImportExportCommands(program: Command) {
     })
 
   imp.command('deals').argument('<file>').option('--dry-run').option('--skip-errors')
-    .action((file, opts) => {
-      const { db, config } = getCtx()
+    .action(async (file, opts) => {
+      const { db, config } = await getCtx()
       const records = readRecords(file)
       let imported = 0
       for (const rec of records) {
@@ -123,10 +136,15 @@ export function registerImportExportCommands(program: Command) {
           if (opts.dryRun) { console.log(`[dry-run] ${rec.title}`); imported++; continue }
           const id = makeId('dl')
           const n = now()
-          db.run('INSERT INTO deals (id,title,value,stage,contacts,company,expected_close,probability,tags,custom_fields,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-            [id, rec.title, value, stage, '[]', null, rec.expected_close || null, rec.probability ? Number(rec.probability) : null, JSON.stringify(tags), JSON.stringify(custom), n, n])
-          const row = db.query('SELECT * FROM deals WHERE id = ?').get(id)
-          upsertSearchIndex(db, 'deal', id, buildDealSearch(row))
+          await db.insert(schema.deals).values({
+            id, title: rec.title, value, stage, contacts: '[]', company: null,
+            expected_close: rec.expected_close || null,
+            probability: rec.probability ? Number(rec.probability) : null,
+            tags: JSON.stringify(tags), custom_fields: JSON.stringify(custom), created_at: n, updated_at: n
+          })
+          const results = await db.select().from(schema.deals).where(eq(schema.deals.id, id))
+          const row = results[0]
+          await upsertSearchIndex(db, 'deal', id, buildDealSearch(row))
           imported++
         } catch (e: any) {
           if (opts.skipErrors) continue
@@ -137,28 +155,28 @@ export function registerImportExportCommands(program: Command) {
     })
 
   const exp = program.command('export').description('Export data')
-  exp.command('contacts').action(() => {
-    const { db, config, fmt } = getCtx()
-    const rows = (db.query('SELECT * FROM contacts').all() as any[]).map(c => contactToRow(c, config))
+  exp.command('contacts').action(async () => {
+    const { db, config, fmt } = await getCtx()
+    const rows = (await db.select().from(schema.contacts)).map(c => contactToRow(c, config))
     console.log(formatOutput(rows, fmt, config))
   })
-  exp.command('companies').action(() => {
-    const { db, config, fmt } = getCtx()
-    const rows = (db.query('SELECT * FROM companies').all() as any[]).map(c => companyToRow(c, config))
+  exp.command('companies').action(async () => {
+    const { db, config, fmt } = await getCtx()
+    const rows = (await db.select().from(schema.companies)).map(c => companyToRow(c, config))
     console.log(formatOutput(rows, fmt, config))
   })
-  exp.command('deals').action(() => {
-    const { db, config, fmt } = getCtx()
-    const rows = (db.query('SELECT * FROM deals').all() as any[]).map(d => dealToRow(d, config))
+  exp.command('deals').action(async () => {
+    const { db, config, fmt } = await getCtx()
+    const rows = (await db.select().from(schema.deals)).map(d => dealToRow(d, config))
     console.log(formatOutput(rows, fmt, config))
   })
-  exp.command('all').action(() => {
-    const { db, config, fmt } = getCtx()
+  exp.command('all').action(async () => {
+    const { db, config, fmt } = await getCtx()
     const data = {
-      contacts: (db.query('SELECT * FROM contacts').all() as any[]).map(c => contactToRow(c, config)),
-      companies: (db.query('SELECT * FROM companies').all() as any[]).map(c => companyToRow(c, config)),
-      deals: (db.query('SELECT * FROM deals').all() as any[]).map(d => dealToRow(d, config)),
-      activities: (db.query('SELECT * FROM activities').all() as any[]).map(a => activityToRow(a)),
+      contacts: (await db.select().from(schema.contacts)).map(c => contactToRow(c, config)),
+      companies: (await db.select().from(schema.companies)).map(c => companyToRow(c, config)),
+      deals: (await db.select().from(schema.deals)).map(d => dealToRow(d, config)),
+      activities: (await db.select().from(schema.activities)).map(a => activityToRow(a)),
     }
     if (fmt === 'json') console.log(JSON.stringify(data, null, 2))
     else console.log(formatOutput(Object.entries(data).map(([k, v]) => ({ type: k, count: v.length })), fmt, config))
@@ -190,8 +208,8 @@ function splitField(val: string | undefined): string[] {
   return val.split(',').map(s => s.trim()).filter(Boolean)
 }
 
-function findContactByEmail(db: any, email: string): any | null {
-  const all = db.query('SELECT * FROM contacts').all() as any[]
+async function findContactByEmail(db: DB, email: string): Promise<any | null> {
+  const all = await db.select().from(schema.contacts)
   for (const c of all) {
     const emails: string[] = safeJSON(c.emails)
     if (emails.some((e: string) => e.toLowerCase() === email.toLowerCase())) return c

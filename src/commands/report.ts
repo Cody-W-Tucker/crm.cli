@@ -1,13 +1,15 @@
+import { eq, sql } from 'drizzle-orm'
 import type { Command } from 'commander'
 import { getCtx } from '../lib/helpers'
 import { formatOutput, safeJSON, activityToRow, dealToRow } from '../format'
+import * as schema from '../drizzle-schema'
 
 export function registerReportCommands(program: Command) {
   const cmd = program.command('report').description('Reports')
 
-  cmd.command('pipeline').action(() => {
-    const { db, config, fmt } = getCtx()
-    const deals = db.query('SELECT * FROM deals').all() as any[]
+  cmd.command('pipeline').action(async () => {
+    const { db, config, fmt } = await getCtx()
+    const deals = await db.select().from(schema.deals)
     const summary = config.pipeline.stages.map(stage => ({
       stage,
       count: deals.filter(d => d.stage === stage).length,
@@ -22,9 +24,9 @@ export function registerReportCommands(program: Command) {
   cmd.command('activity')
     .option('--by <field>', 'Group by (type or contact)')
     .option('--period <period>', 'Time period (e.g. 7d, 30d)')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let activities = db.query('SELECT * FROM activities').all() as any[]
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let activities = await db.select().from(schema.activities)
       if (opts.period) {
         const cutoff = periodToDate(opts.period)
         if (cutoff) activities = activities.filter(a => a.created_at >= cutoff)
@@ -37,11 +39,13 @@ export function registerReportCommands(program: Command) {
       }
       let data: any[]
       if (groupBy === 'contact') {
-        data = Object.entries(groups).map(([contact, count]) => {
+        const dataPromises = Object.entries(groups).map(async ([contact, count]) => {
           if (contact === 'none') return { contact: '(none)', count }
-          const ct = db.query('SELECT name FROM contacts WHERE id = ?').get(contact) as any
+          const results = await db.select({ name: schema.contacts.name }).from(schema.contacts).where(eq(schema.contacts.id, contact))
+          const ct = results[0]
           return { contact: ct?.name || contact, count }
         })
+        data = await Promise.all(dataPromises)
       } else {
         data = Object.entries(groups).map(([type, count]) => ({ type, count }))
       }
@@ -52,25 +56,25 @@ export function registerReportCommands(program: Command) {
   cmd.command('stale')
     .option('--days <n>', 'Days threshold', '30')
     .option('--type <type>', 'Entity type (contact or deal)')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
       const days = Number(opts.days)
       const cutoff = new Date(Date.now() - days * 86400000).toISOString()
       const results: any[] = []
       if (!opts.type || opts.type === 'contact') {
-        const contacts = db.query('SELECT * FROM contacts').all() as any[]
+        const contacts = await db.select().from(schema.contacts)
         for (const c of contacts) {
-          const lastActivity = db.query('SELECT MAX(created_at) as last FROM activities WHERE contact = ?').get(c.id) as any
+          const lastActivity = (await db.all(sql`SELECT MAX(created_at) as last FROM activities WHERE contact = ${c.id}`) as any[])[0]
           if (!lastActivity?.last || lastActivity.last < cutoff) {
             results.push({ type: 'contact', id: c.id, name: c.name, last_activity: lastActivity?.last || null })
           }
         }
       }
       if (!opts.type || opts.type === 'deal') {
-        const deals = db.query('SELECT * FROM deals').all() as any[]
+        const deals = await db.select().from(schema.deals)
         for (const d of deals) {
           if (d.stage === 'closed-won' || d.stage === 'closed-lost') continue
-          const lastActivity = db.query('SELECT MAX(created_at) as last FROM activities WHERE deal = ?').get(d.id) as any
+          const lastActivity = (await db.all(sql`SELECT MAX(created_at) as last FROM activities WHERE deal = ${d.id}`) as any[])[0]
           const lastTouch = lastActivity?.last || d.created_at
           if (lastTouch < cutoff) {
             results.push({ type: 'deal', id: d.id, title: d.title, last_activity: lastActivity?.last || null })
@@ -85,14 +89,14 @@ export function registerReportCommands(program: Command) {
       }
     })
 
-  cmd.command('conversion').action(() => {
-    const { db, config, fmt } = getCtx()
+  cmd.command('conversion').action(async () => {
+    const { db, config, fmt } = await getCtx()
     const stages = config.pipeline.stages
-    const activities = db.query("SELECT * FROM activities WHERE type = 'stage-change'").all() as any[]
+    const activities = await db.select().from(schema.activities).where(eq(schema.activities.type, 'stage-change'))
     const stageEntries: Record<string, Set<string>> = {}
     const stageExits: Record<string, Set<string>> = {}
     for (const s of stages) { stageEntries[s] = new Set(); stageExits[s] = new Set() }
-    const deals = db.query('SELECT * FROM deals').all() as any[]
+    const deals = await db.select().from(schema.deals)
     for (const d of deals) {
       const dealActivities = activities.filter(a => a.deal === d.id)
       if (dealActivities.length === 0) {
@@ -120,16 +124,19 @@ export function registerReportCommands(program: Command) {
     else console.log(formatOutput(data, fmt, config))
   })
 
-  cmd.command('velocity').action(() => {
-    const { db, config, fmt } = getCtx()
+  cmd.command('velocity').action(async () => {
+    const { db, config, fmt } = await getCtx()
     const stages = config.pipeline.stages
-    const activities = db.query("SELECT * FROM activities WHERE type = 'stage-change' ORDER BY created_at ASC").all() as any[]
+    const activities = await db.select().from(schema.activities)
+      .where(eq(schema.activities.type, 'stage-change'))
+      .orderBy(schema.activities.created_at)
     const stageTimes: Record<string, number[]> = {}
     for (const s of stages) stageTimes[s] = []
     const dealIds = [...new Set(activities.map(a => a.deal))]
     for (const did of dealIds) {
       const dealActs = activities.filter(a => a.deal === did)
-      const deal = db.query('SELECT * FROM deals WHERE id = ?').get(did) as any
+      const dealResults = await db.select().from(schema.deals).where(eq(schema.deals.id, did!))
+      const deal = dealResults[0]
       if (!deal) continue
       let prevTime = new Date(deal.created_at).getTime()
       const first = dealActs[0]
@@ -158,9 +165,9 @@ export function registerReportCommands(program: Command) {
 
   cmd.command('forecast')
     .option('--period <period>', 'Filter by expected close month (YYYY-MM) or days (30d)')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let deals = db.query('SELECT * FROM deals').all() as any[]
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let deals = await db.select().from(schema.deals)
       deals = deals.filter(d => d.stage !== 'closed-won' && d.stage !== 'closed-lost')
       if (opts.period) {
         if (opts.period.match(/^\d{4}-\d{2}$/)) {
@@ -185,9 +192,9 @@ export function registerReportCommands(program: Command) {
 
   cmd.command('won')
     .option('--period <period>', 'Time period (e.g. 30d)')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let deals = (db.query("SELECT * FROM deals WHERE stage = 'closed-won'").all() as any[])
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let deals = await db.select().from(schema.deals).where(eq(schema.deals.stage, 'closed-won'))
       if (opts.period) {
         const cutoff = periodToDate(opts.period)
         if (cutoff) deals = deals.filter(d => d.updated_at >= cutoff)
@@ -200,22 +207,23 @@ export function registerReportCommands(program: Command) {
   cmd.command('lost')
     .option('--reasons', 'Show loss reasons')
     .option('--period <period>', 'Time period')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let deals = (db.query("SELECT * FROM deals WHERE stage = 'closed-lost'").all() as any[])
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let deals = await db.select().from(schema.deals).where(eq(schema.deals.stage, 'closed-lost'))
       if (opts.period) {
         const cutoff = periodToDate(opts.period)
         if (cutoff) deals = deals.filter(d => d.updated_at >= cutoff)
       }
-      const data = deals.map(d => {
+      const data = await Promise.all(deals.map(async d => {
         const row = dealToRow(d, config) as any
         if (opts.reasons) {
-          const act = db.query("SELECT body FROM activities WHERE deal = ? AND type = 'stage-change' AND body LIKE '%closed-lost%'").get(d.id) as any
+          const actResults = await db.all(sql`SELECT body FROM activities WHERE deal = ${d.id} AND type = 'stage-change' AND body LIKE '%closed-lost%'`) as any[]
+          const act = actResults[0]
           const reason = act?.body?.split('|').slice(1).map((s: string) => s.trim()).join(', ') || ''
           row.reason = reason
         }
         return row
-      })
+      }))
       if (fmt === 'json') console.log(JSON.stringify(data, null, 2))
       else console.log(formatOutput(data, fmt, config))
     })

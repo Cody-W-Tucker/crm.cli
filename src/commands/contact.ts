@@ -1,3 +1,4 @@
+import { eq, sql } from 'drizzle-orm'
 import type { Command } from 'commander'
 import { getCtx, makeId, now, die, collect, parseKV, checkDupeEmail, checkDupePhone, checkDupeSocial,
   getOrCreateCompany, buildContactSearch, contactDetail, showEntity } from '../lib/helpers'
@@ -7,6 +8,7 @@ import { resolveContact } from '../resolve'
 import { upsertSearchIndex, removeSearchIndex } from '../db'
 import { parseFilter, applyFilter } from '../filter'
 import { runHook } from '../hooks'
+import * as schema from '../drizzle-schema'
 
 export function registerContactCommands(program: Command) {
   const cmd = program.command('contact').description('Manage contacts')
@@ -22,16 +24,16 @@ export function registerContactCommands(program: Command) {
     .option('--bluesky <h>', 'Bluesky')
     .option('--telegram <h>', 'Telegram')
     .option('--set <kv>', 'Custom field', collect, [])
-    .action((opts) => {
-      const { db, config } = getCtx()
+    .action(async (opts) => {
+      const { db, config } = await getCtx()
       const cid = makeId('ct')
       const n = now()
-      for (const e of opts.email) checkDupeEmail(db, e)
+      for (const e of opts.email) await checkDupeEmail(db, e)
       const phones: string[] = []
       for (const p of opts.phone) {
         try {
           const norm = normalizePhone(p, config.phone.default_country)
-          checkDupePhone(db, norm, 'contacts')
+          await checkDupePhone(db, norm, 'contacts')
           phones.push(norm)
         } catch (e: any) { die(`Error: invalid phone — ${e.message}`) }
       }
@@ -39,18 +41,21 @@ export function registerContactCommands(program: Command) {
       const x = opts.x ? normalizeSocialHandle('x', opts.x) : null
       const bluesky = opts.bluesky ? normalizeSocialHandle('bluesky', opts.bluesky) : null
       const telegram = opts.telegram ? normalizeSocialHandle('telegram', opts.telegram) : null
-      if (linkedin) checkDupeSocial(db, 'linkedin', linkedin)
-      if (x) checkDupeSocial(db, 'x', x)
-      if (bluesky) checkDupeSocial(db, 'bluesky', bluesky)
-      if (telegram) checkDupeSocial(db, 'telegram', telegram)
+      if (linkedin) await checkDupeSocial(db, 'linkedin', linkedin)
+      if (x) await checkDupeSocial(db, 'x', x)
+      if (bluesky) await checkDupeSocial(db, 'bluesky', bluesky)
+      if (telegram) await checkDupeSocial(db, 'telegram', telegram)
       const companies: string[] = []
-      for (const c of opts.company) companies.push(getOrCreateCompany(db, c, config))
+      for (const c of opts.company) companies.push(await getOrCreateCompany(db, c, config))
       const custom = parseKV(opts.set)
-      db.run('INSERT INTO contacts (id,name,emails,phones,companies,linkedin,x,bluesky,telegram,tags,custom_fields,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
-        [cid, opts.name, JSON.stringify(opts.email), JSON.stringify(phones), JSON.stringify(companies),
-         linkedin, x, bluesky, telegram, JSON.stringify(opts.tag), JSON.stringify(custom), n, n])
-      const row = db.query('SELECT * FROM contacts WHERE id = ?').get(cid)
-      upsertSearchIndex(db, 'contact', cid, buildContactSearch(row))
+      await db.insert(schema.contacts).values({
+        id: cid, name: opts.name, emails: JSON.stringify(opts.email), phones: JSON.stringify(phones),
+        companies: JSON.stringify(companies), linkedin, x, bluesky, telegram,
+        tags: JSON.stringify(opts.tag), custom_fields: JSON.stringify(custom), created_at: n, updated_at: n
+      })
+      const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, cid))
+      const row = results[0]
+      await upsertSearchIndex(db, 'contact', cid, buildContactSearch(row))
       runHook(config, 'post-contact-add', { id: cid, name: opts.name, emails: opts.email, phones, companies, linkedin, x, bluesky, telegram, tags: opts.tag, custom_fields: custom })
       console.log(cid)
     })
@@ -62,9 +67,9 @@ export function registerContactCommands(program: Command) {
     .option('--limit <n>')
     .option('--offset <n>')
     .option('--filter <expr>')
-    .action((opts) => {
-      const { db, config, fmt } = getCtx()
-      let rows = (db.query('SELECT * FROM contacts').all() as any[]).map(c => contactToRow(c, config))
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      let rows = (await db.select().from(schema.contacts)).map(c => contactToRow(c, config))
       if (opts.tag) rows = rows.filter(c => c.tags.includes(opts.tag))
       if (opts.company) rows = rows.filter(c => c.companies.includes(opts.company))
       if (opts.filter) { const f = parseFilter(opts.filter); rows = rows.filter(c => applyFilter(c, f)) }
@@ -74,11 +79,11 @@ export function registerContactCommands(program: Command) {
       console.log(formatOutput(rows, fmt, config))
     })
 
-  cmd.command('show').argument('<ref>').action((ref) => {
-    const { db, config, fmt } = getCtx()
-    const c = resolveContact(db, ref, config)
+  cmd.command('show').argument('<ref>').action(async (ref) => {
+    const { db, config, fmt } = await getCtx()
+    const c = await resolveContact(db, ref, config)
     if (!c) die(`Error: contact not found: ${ref}`)
-    showEntity(contactDetail(db, c, config), fmt)
+    showEntity(await contactDetail(db, c, config), fmt)
   })
 
   cmd.command('edit').argument('<ref>')
@@ -97,9 +102,9 @@ export function registerContactCommands(program: Command) {
     .option('--telegram <h>')
     .option('--set <kv>', '', collect, [])
     .option('--unset <key>', '', collect, [])
-    .action((ref, opts) => {
-      const { db, config } = getCtx()
-      const c = resolveContact(db, ref, config)
+    .action(async (ref, opts) => {
+      const { db, config } = await getCtx()
+      const c = await resolveContact(db, ref, config)
       if (!c) die(`Error: contact not found: ${ref}`)
       let emails: string[] = safeJSON(c.emails)
       let phones: string[] = safeJSON(c.phones)
@@ -108,19 +113,19 @@ export function registerContactCommands(program: Command) {
       let custom: Record<string, any> = safeJSON(c.custom_fields)
       let name = c.name, linkedin = c.linkedin, x = c.x, bluesky = c.bluesky, telegram = c.telegram
       if (opts.name) name = opts.name
-      for (const e of opts.addEmail) { checkDupeEmail(db, e, c.id); if (!emails.includes(e)) emails.push(e) }
+      for (const e of opts.addEmail) { await checkDupeEmail(db, e, c.id); if (!emails.includes(e)) emails.push(e) }
       for (const e of opts.rmEmail) emails = emails.filter(v => v !== e)
       for (const p of opts.addPhone) {
         const norm = normalizePhone(p, config.phone.default_country)
         if (phones.includes(norm)) die(`Error: duplicate phone "${p}" — already on this contact`)
-        checkDupePhone(db, norm, 'contacts', c.id)
+        await checkDupePhone(db, norm, 'contacts', c.id)
         phones.push(norm)
       }
       for (const p of opts.rmPhone) {
         const norm = tryNormalizePhone(p, config.phone.default_country)
         phones = norm ? phones.filter(v => v !== norm) : phones.filter(v => v !== p)
       }
-      for (const co of opts.addCompany) { const n = getOrCreateCompany(db, co, config); if (!companies.includes(n)) companies.push(n) }
+      for (const co of opts.addCompany) { const n = await getOrCreateCompany(db, co, config); if (!companies.includes(n)) companies.push(n) }
       for (const co of opts.rmCompany) companies = companies.filter(v => v !== co)
       for (const t of opts.addTag) { if (!tags.includes(t)) tags.push(t) }
       for (const t of opts.rmTag) tags = tags.filter(v => v !== t)
@@ -137,32 +142,36 @@ export function registerContactCommands(program: Command) {
         if (k === 'bluesky') bluesky = null
         if (k === 'telegram') telegram = null
       }
-      db.run('UPDATE contacts SET name=?,emails=?,phones=?,companies=?,linkedin=?,x=?,bluesky=?,telegram=?,tags=?,custom_fields=?,updated_at=? WHERE id=?',
-        [name, JSON.stringify(emails), JSON.stringify(phones), JSON.stringify(companies), linkedin, x, bluesky, telegram, JSON.stringify(tags), JSON.stringify(custom), now(), c.id])
-      const row = db.query('SELECT * FROM contacts WHERE id = ?').get(c.id)
-      upsertSearchIndex(db, 'contact', c.id, buildContactSearch(row))
+      await db.update(schema.contacts).set({
+        name, emails: JSON.stringify(emails), phones: JSON.stringify(phones),
+        companies: JSON.stringify(companies), linkedin, x, bluesky, telegram,
+        tags: JSON.stringify(tags), custom_fields: JSON.stringify(custom), updated_at: now()
+      }).where(eq(schema.contacts.id, c.id))
+      const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, c.id))
+      const row = results[0]
+      await upsertSearchIndex(db, 'contact', c.id, buildContactSearch(row))
     })
 
-  cmd.command('rm').argument('<ref>').option('--force').action((ref) => {
-    const { db, config } = getCtx()
-    const c = resolveContact(db, ref, config)
+  cmd.command('rm').argument('<ref>').option('--force').action(async (ref) => {
+    const { db, config } = await getCtx()
+    const c = await resolveContact(db, ref, config)
     if (!c) die(`Error: contact not found: ${ref}`)
     if (!runHook(config, 'pre-contact-rm', { id: c.id, name: c.name }))
       die('Error: pre-contact-rm hook rejected deletion')
-    const deals = db.query('SELECT * FROM deals').all() as any[]
-    for (const d of deals) {
+    const allDeals = await db.select().from(schema.deals)
+    for (const d of allDeals) {
       const contacts: string[] = safeJSON(d.contacts)
       if (contacts.includes(c.id))
-        db.run('UPDATE deals SET contacts=? WHERE id=?', [JSON.stringify(contacts.filter(id => id !== c.id)), d.id])
+        await db.update(schema.deals).set({ contacts: JSON.stringify(contacts.filter(id => id !== c.id)) }).where(eq(schema.deals.id, d.id))
     }
-    db.run('DELETE FROM contacts WHERE id=?', [c.id])
-    removeSearchIndex(db, c.id)
+    await db.delete(schema.contacts).where(eq(schema.contacts.id, c.id))
+    await removeSearchIndex(db, c.id)
     runHook(config, 'post-contact-rm', { id: c.id, name: c.name })
   })
 
-  cmd.command('merge').argument('<id1>').argument('<id2>').option('--keep-first').action((id1, id2) => {
-    const { db, config } = getCtx()
-    const c1 = resolveContact(db, id1, config), c2 = resolveContact(db, id2, config)
+  cmd.command('merge').argument('<id1>').argument('<id2>').option('--keep-first').action(async (id1, id2) => {
+    const { db, config } = await getCtx()
+    const c1 = await resolveContact(db, id1, config), c2 = await resolveContact(db, id2, config)
     if (!c1 || !c2) die('Error: one or both contacts not found')
     const mergedEmails = [...new Set([...safeJSON(c1.emails), ...safeJSON(c2.emails)])]
     const mergedPhones = [...new Set([...safeJSON(c1.phones), ...safeJSON(c2.phones)])]
@@ -174,22 +183,25 @@ export function registerContactCommands(program: Command) {
     const bluesky = c1.bluesky || c2.bluesky
     const telegram = c1.telegram || c2.telegram
     // Clear loser's social handles to avoid UNIQUE constraint conflicts, then delete loser first
-    db.run('UPDATE contacts SET linkedin=NULL,x=NULL,bluesky=NULL,telegram=NULL WHERE id=?', [c2.id])
-    db.run('UPDATE contacts SET emails=?,phones=?,companies=?,tags=?,custom_fields=?,linkedin=?,x=?,bluesky=?,telegram=?,updated_at=? WHERE id=?',
-      [JSON.stringify(mergedEmails), JSON.stringify(mergedPhones), JSON.stringify(mergedCompanies),
-       JSON.stringify(mergedTags), JSON.stringify(mergedCustom), linkedin, x, bluesky, telegram, now(), c1.id])
-    const deals = db.query('SELECT * FROM deals').all() as any[]
-    for (const d of deals) {
+    await db.update(schema.contacts).set({ linkedin: null, x: null, bluesky: null, telegram: null }).where(eq(schema.contacts.id, c2.id))
+    await db.update(schema.contacts).set({
+      emails: JSON.stringify(mergedEmails), phones: JSON.stringify(mergedPhones),
+      companies: JSON.stringify(mergedCompanies), tags: JSON.stringify(mergedTags),
+      custom_fields: JSON.stringify(mergedCustom), linkedin, x, bluesky, telegram, updated_at: now()
+    }).where(eq(schema.contacts.id, c1.id))
+    const allDeals = await db.select().from(schema.deals)
+    for (const d of allDeals) {
       const contacts: string[] = safeJSON(d.contacts)
       if (contacts.includes(c2.id)) {
         const updated = [...new Set(contacts.map(id => id === c2.id ? c1.id : id))]
-        db.run('UPDATE deals SET contacts=? WHERE id=?', [JSON.stringify(updated), d.id])
+        await db.update(schema.deals).set({ contacts: JSON.stringify(updated) }).where(eq(schema.deals.id, d.id))
       }
     }
-    db.run('UPDATE activities SET contact=? WHERE contact=?', [c1.id, c2.id])
-    db.run('DELETE FROM contacts WHERE id=?', [c2.id])
-    removeSearchIndex(db, c2.id)
-    const row = db.query('SELECT * FROM contacts WHERE id = ?').get(c1.id)
-    upsertSearchIndex(db, 'contact', c1.id, buildContactSearch(row))
+    await db.update(schema.activities).set({ contact: c1.id }).where(eq(schema.activities.contact, c2.id))
+    await db.delete(schema.contacts).where(eq(schema.contacts.id, c2.id))
+    await removeSearchIndex(db, c2.id)
+    const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, c1.id))
+    const row = results[0]
+    await upsertSearchIndex(db, 'contact', c1.id, buildContactSearch(row))
   })
 }

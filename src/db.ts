@@ -1,8 +1,13 @@
-import { Database } from 'bun:sqlite'
+import { createClient } from '@libsql/client'
+import { drizzle } from 'drizzle-orm/libsql'
+import { sql } from 'drizzle-orm'
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
+import * as schema from './drizzle-schema'
 
-const SCHEMA = `
+export type DB = ReturnType<typeof drizzle<typeof schema>>
+
+const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS contacts (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -64,50 +69,61 @@ CREATE TABLE IF NOT EXISTS activities (
 CREATE VIRTUAL TABLE IF NOT EXISTS search_index USING fts5(
   entity_type, entity_id, content
 );
-`;
+`
 
-export function openDB(dbPath: string): Database {
+export async function openDB(dbPath: string): Promise<DB> {
   mkdirSync(dirname(dbPath), { recursive: true })
-  const db = new Database(dbPath, { create: true })
-  db.exec('PRAGMA journal_mode=WAL')
-  db.exec('PRAGMA foreign_keys=ON')
-  db.exec(SCHEMA)
+  const client = createClient({ url: `file:${dbPath}` })
+  const db = drizzle(client, { schema })
+
+  // Initialize schema: execute each statement separately since libSQL
+  // doesn't support multi-statement exec natively
+  const statements = SCHEMA_SQL.split(';')
+    .map(s => s.trim())
+    .filter(s => s.length > 0)
+  for (const stmt of statements) {
+    await client.execute(stmt)
+  }
+
+  await client.execute('PRAGMA journal_mode=WAL')
+  await client.execute('PRAGMA foreign_keys=ON')
+
   return db
 }
 
-export function upsertSearchIndex(db: Database, entityType: string, entityId: string, content: string): void {
-  db.run('DELETE FROM search_index WHERE entity_id = ?', [entityId])
-  db.run('INSERT INTO search_index (entity_type, entity_id, content) VALUES (?, ?, ?)', [entityType, entityId, content])
+export async function upsertSearchIndex(db: DB, entityType: string, entityId: string, content: string): Promise<void> {
+  await db.run(sql`DELETE FROM search_index WHERE entity_id = ${entityId}`)
+  await db.run(sql`INSERT INTO search_index (entity_type, entity_id, content) VALUES (${entityType}, ${entityId}, ${content})`)
 }
 
-export function removeSearchIndex(db: Database, entityId: string): void {
-  db.run('DELETE FROM search_index WHERE entity_id = ?', [entityId])
+export async function removeSearchIndex(db: DB, entityId: string): Promise<void> {
+  await db.run(sql`DELETE FROM search_index WHERE entity_id = ${entityId}`)
 }
 
-export function rebuildSearchIndex(db: Database): void {
-  db.run('DELETE FROM search_index')
+export async function rebuildSearchIndex(db: DB): Promise<void> {
+  await db.run(sql`DELETE FROM search_index`)
 
-  const contacts = db.query('SELECT * FROM contacts').all() as any[]
-  for (const c of contacts) {
+  const allContacts = await db.select().from(schema.contacts)
+  for (const c of allContacts) {
     const content = [c.name, c.emails, c.phones, c.linkedin, c.x, c.bluesky, c.telegram, c.tags, c.custom_fields].filter(Boolean).join(' ')
-    db.run('INSERT INTO search_index (entity_type, entity_id, content) VALUES (?, ?, ?)', ['contact', c.id, content])
+    await db.run(sql`INSERT INTO search_index (entity_type, entity_id, content) VALUES (${'contact'}, ${c.id}, ${content})`)
   }
 
-  const companies = db.query('SELECT * FROM companies').all() as any[]
-  for (const co of companies) {
+  const allCompanies = await db.select().from(schema.companies)
+  for (const co of allCompanies) {
     const content = [co.name, co.websites, co.phones, co.tags, co.custom_fields].filter(Boolean).join(' ')
-    db.run('INSERT INTO search_index (entity_type, entity_id, content) VALUES (?, ?, ?)', ['company', co.id, content])
+    await db.run(sql`INSERT INTO search_index (entity_type, entity_id, content) VALUES (${'company'}, ${co.id}, ${content})`)
   }
 
-  const deals = db.query('SELECT * FROM deals').all() as any[]
-  for (const d of deals) {
+  const allDeals = await db.select().from(schema.deals)
+  for (const d of allDeals) {
     const content = [d.title, d.stage, d.tags, d.custom_fields].filter(Boolean).join(' ')
-    db.run('INSERT INTO search_index (entity_type, entity_id, content) VALUES (?, ?, ?)', ['deal', d.id, content])
+    await db.run(sql`INSERT INTO search_index (entity_type, entity_id, content) VALUES (${'deal'}, ${d.id}, ${content})`)
   }
 
-  const activities = db.query('SELECT * FROM activities').all() as any[]
-  for (const a of activities) {
+  const allActivities = await db.select().from(schema.activities)
+  for (const a of allActivities) {
     const content = [a.type, a.body, a.custom_fields].filter(Boolean).join(' ')
-    db.run('INSERT INTO search_index (entity_type, entity_id, content) VALUES (?, ?, ?)', ['activity', a.id, content])
+    await db.run(sql`INSERT INTO search_index (entity_type, entity_id, content) VALUES (${'activity'}, ${a.id}, ${content})`)
   }
 }

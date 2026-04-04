@@ -1,10 +1,12 @@
 import { ulid } from 'ulid'
-import type { Database } from 'bun:sqlite'
+import { eq, sql } from 'drizzle-orm'
+import type { DB } from '../db'
 import { loadConfig, type CRMConfig } from '../config'
 import { openDB, upsertSearchIndex } from '../db'
 import { normalizePhone, tryNormalizePhone, normalizeWebsite, normalizeSocialHandle, formatPhone } from '../normalize'
 import { safeJSON, contactToRow, companyToRow, dealToRow, activityToRow } from '../format'
 import { resolveCompanyForLink } from '../resolve'
+import * as schema from '../drizzle-schema'
 
 // ── Global option extraction ──
 const rawArgv = process.argv.slice(2)
@@ -18,9 +20,9 @@ for (let i = 0; i < rawArgv.length; i++) {
   cleanArgv.push(rawArgv[i])
 }
 
-export function getCtx() {
+export async function getCtx() {
   const config = loadConfig({ configPath: gConfig, dbPath: gDb, format: gFmt })
-  const db = openDB(config.database.path)
+  const db = await openDB(config.database.path)
   return { config, db, fmt: config.defaults.format }
 }
 
@@ -38,28 +40,28 @@ export function parseKV(arr: string[]): Record<string, string> {
   return r
 }
 
-export function getOrCreateCompany(db: Database, ref: string, config: CRMConfig): string {
-  const co = resolveCompanyForLink(db, ref, config)
+export async function getOrCreateCompany(db: DB, ref: string, config: CRMConfig): Promise<string> {
+  const co = await resolveCompanyForLink(db, ref, config)
   if (co) return co.name
   const cid = makeId('co')
   const n = now()
-  db.run('INSERT INTO companies (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)', [cid, ref, n, n])
-  upsertSearchIndex(db, 'company', cid, ref)
+  await db.insert(schema.companies).values({ id: cid, name: ref, websites: '[]', phones: '[]', tags: '[]', custom_fields: '{}', created_at: n, updated_at: n })
+  await upsertSearchIndex(db, 'company', cid, ref)
   return ref
 }
 
-export function getOrCreateCompanyId(db: Database, ref: string, config: CRMConfig): string {
-  const co = resolveCompanyForLink(db, ref, config)
+export async function getOrCreateCompanyId(db: DB, ref: string, config: CRMConfig): Promise<string> {
+  const co = await resolveCompanyForLink(db, ref, config)
   if (co) return co.id
   const cid = makeId('co')
   const n = now()
-  db.run('INSERT INTO companies (id, name, created_at, updated_at) VALUES (?, ?, ?, ?)', [cid, ref, n, n])
-  upsertSearchIndex(db, 'company', cid, ref)
+  await db.insert(schema.companies).values({ id: cid, name: ref, websites: '[]', phones: '[]', tags: '[]', custom_fields: '{}', created_at: n, updated_at: n })
+  await upsertSearchIndex(db, 'company', cid, ref)
   return cid
 }
 
-export function checkDupeEmail(db: Database, email: string, excludeId?: string) {
-  const all = db.query('SELECT * FROM contacts').all() as any[]
+export async function checkDupeEmail(db: DB, email: string, excludeId?: string) {
+  const all = await db.select().from(schema.contacts)
   for (const c of all) {
     if (excludeId && c.id === excludeId) continue
     const emails: string[] = safeJSON(c.emails)
@@ -68,8 +70,10 @@ export function checkDupeEmail(db: Database, email: string, excludeId?: string) 
   }
 }
 
-export function checkDupePhone(db: Database, phone: string, table: string, excludeId?: string) {
-  const all = db.query(`SELECT * FROM ${table}`).all() as any[]
+export async function checkDupePhone(db: DB, phone: string, table: string, excludeId?: string) {
+  const all = table === 'contacts'
+    ? await db.select().from(schema.contacts)
+    : await db.select().from(schema.companies)
   for (const c of all) {
     if (excludeId && c.id === excludeId) continue
     const phones: string[] = safeJSON(c.phones)
@@ -78,8 +82,8 @@ export function checkDupePhone(db: Database, phone: string, table: string, exclu
   }
 }
 
-export function checkDupeWebsite(db: Database, website: string, excludeId?: string) {
-  const all = db.query('SELECT * FROM companies').all() as any[]
+export async function checkDupeWebsite(db: DB, website: string, excludeId?: string) {
+  const all = await db.select().from(schema.companies)
   for (const co of all) {
     if (excludeId && co.id === excludeId) continue
     const websites: string[] = safeJSON(co.websites)
@@ -88,10 +92,12 @@ export function checkDupeWebsite(db: Database, website: string, excludeId?: stri
   }
 }
 
-export function checkDupeSocial(db: Database, platform: string, handle: string, excludeId?: string) {
-  const existing = db.query(`SELECT * FROM contacts WHERE ${platform} = ?`).get(handle) as any
-  if (existing && existing.id !== excludeId)
-    die(`Error: duplicate ${platform} handle "${handle}" — already belongs to ${existing.name} (${existing.id})`)
+export async function checkDupeSocial(db: DB, platform: string, handle: string, excludeId?: string) {
+  const col = platform as 'linkedin' | 'x' | 'bluesky' | 'telegram'
+  const existing = await db.select().from(schema.contacts).where(eq(schema.contacts[col], handle))
+  const match = existing[0]
+  if (match && match.id !== excludeId)
+    die(`Error: duplicate ${platform} handle "${handle}" — already belongs to ${match.name} (${match.id})`)
 }
 
 export function buildContactSearch(c: any): string {
@@ -107,46 +113,49 @@ export function buildDealSearch(d: any): string {
   return [d.title, d.stage, JSON.stringify(safeJSON(d.custom_fields)), d.tags].filter(Boolean).join(' ')
 }
 
-export function contactDetail(db: Database, c: any, config: CRMConfig): any {
+export async function contactDetail(db: DB, c: any, config: CRMConfig): Promise<any> {
   const row = contactToRow(c, config)
   const phones: string[] = safeJSON(c.phones)
   row._display_phones = phones.map(p => formatPhone(p, config.phone.display, config.phone.default_country))
-  const deals = db.query('SELECT * FROM deals').all() as any[]
-  row.deals = deals.filter(d => {
+  const allDeals = await db.select().from(schema.deals)
+  row.deals = allDeals.filter(d => {
     const contacts: string[] = safeJSON(d.contacts)
     return contacts.includes(c.id)
   }).map(d => ({ id: d.id, title: d.title, stage: d.stage, value: d.value }))
   return row
 }
 
-export function companyDetail(db: Database, co: any, config: CRMConfig): any {
+export async function companyDetail(db: DB, co: any, config: CRMConfig): Promise<any> {
   const row = companyToRow(co, config)
   const phones: string[] = safeJSON(co.phones)
   row._display_phones = phones.map(p => formatPhone(p, config.phone.display, config.phone.default_country))
-  const contacts = db.query('SELECT * FROM contacts').all() as any[]
-  row.contacts = contacts.filter(ct => {
+  const allContacts = await db.select().from(schema.contacts)
+  row.contacts = allContacts.filter(ct => {
     const companies: string[] = safeJSON(ct.companies)
     return companies.includes(co.name)
   }).map(ct => ({ id: ct.id, name: ct.name, emails: safeJSON(ct.emails) }))
-  const deals = db.query('SELECT * FROM deals WHERE company = ?').all(co.id) as any[]
-  row.deals = deals.map(d => ({ id: d.id, title: d.title, stage: d.stage, value: d.value }))
+  const allDeals = await db.select().from(schema.deals).where(eq(schema.deals.company, co.id))
+  row.deals = allDeals.map(d => ({ id: d.id, title: d.title, stage: d.stage, value: d.value }))
   return row
 }
 
-export function dealDetail(db: Database, d: any, config: CRMConfig): any {
+export async function dealDetail(db: DB, d: any, config: CRMConfig): Promise<any> {
   const row = dealToRow(d, config)
   const contactIds: string[] = safeJSON(d.contacts)
-  row.contacts = contactIds.map(cid => {
-    const ct = db.query('SELECT * FROM contacts WHERE id = ?').get(cid) as any
+  const contactPromises = contactIds.map(async cid => {
+    const results = await db.select().from(schema.contacts).where(eq(schema.contacts.id, cid))
+    const ct = results[0]
     return ct ? { id: ct.id, name: ct.name, emails: safeJSON(ct.emails) } : null
-  }).filter(Boolean)
+  })
+  row.contacts = (await Promise.all(contactPromises)).filter(Boolean)
   if (d.company) {
-    const co = db.query('SELECT * FROM companies WHERE id = ?').get(d.company) as any
+    const results = await db.select().from(schema.companies).where(eq(schema.companies.id, d.company))
+    const co = results[0]
     row.company = co ? { id: co.id, name: co.name } : null
   }
-  const stageChanges = db.query(
-    "SELECT * FROM activities WHERE deal = ? AND type = 'stage-change' ORDER BY created_at ASC"
-  ).all(d.id) as any[]
+  const stageChanges = await db.select().from(schema.activities)
+    .where(sql`${schema.activities.deal} = ${d.id} AND ${schema.activities.type} = 'stage-change'`)
+    .orderBy(schema.activities.created_at)
   const history: { stage: string; at: string }[] = []
   if (stageChanges.length > 0) {
     const m = stageChanges[0].body.match(/from (\S+) to/)
