@@ -50,7 +50,7 @@ export function registerReportCommands(program: Command) {
         const key = groupBy === 'contact' ? a.contact || 'none' : a.type
         groups[key] = (groups[key] || 0) + 1
       }
-      let data: any[]
+      let data: Record<string, unknown>[]
       if (groupBy === 'contact') {
         const dataPromises = Object.entries(groups).map(
           async ([contact, count]) => {
@@ -84,14 +84,14 @@ export function registerReportCommands(program: Command) {
       const { db, fmt } = await getCtx()
       const days = Number(opts.days)
       const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
-      const results: any[] = []
+      const results: Record<string, unknown>[] = []
       if (!opts.type || opts.type === 'contact') {
         const contacts = await db.select().from(schema.contacts)
         for (const c of contacts) {
           const lastActivity = (
             (await db.all(
               sql`SELECT MAX(created_at) as last FROM activities WHERE contact = ${c.id}`,
-            )) as any[]
+            )) as { last: string | null }[]
           )[0]
           if (!lastActivity?.last || lastActivity.last < cutoff) {
             results.push({
@@ -112,7 +112,7 @@ export function registerReportCommands(program: Command) {
           const lastActivity = (
             (await db.all(
               sql`SELECT MAX(created_at) as last FROM activities WHERE deal = ${d.id}`,
-            )) as any[]
+            )) as { last: string | null }[]
           )[0]
           const lastTouch = lastActivity?.last || d.created_at
           if (lastTouch < cutoff) {
@@ -348,11 +348,11 @@ export function registerReportCommands(program: Command) {
       }
       const data = await Promise.all(
         deals.map(async (d) => {
-          const row = dealToRow(d, config) as any
+          const row: Record<string, unknown> = dealToRow(d, config)
           if (opts.reasons) {
             const actResults = (await db.all(
               sql`SELECT body FROM activities WHERE deal = ${d.id} AND type = 'stage-change' AND body LIKE '%closed-lost%'`,
-            )) as any[]
+            )) as { body: string | null }[]
             const act = actResults[0]
             const reason =
               act?.body

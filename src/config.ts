@@ -67,6 +67,7 @@ function findConfigFile(startDir: string): string | null {
 
 function mergeConfig(
   base: CRMConfig,
+  // biome-ignore lint/suspicious/noExplicitAny: TOML parse output has no static type
   override: Record<string, any>,
 ): CRMConfig {
   const result = { ...base }

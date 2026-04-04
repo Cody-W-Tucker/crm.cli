@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm'
 
+import type { CRMConfig } from './config'
 import type { DB } from './db'
+import type { Company, Contact, Deal } from './drizzle-schema'
 import * as schema from './drizzle-schema'
 import { safeJSON } from './format.ts'
 import {
@@ -14,8 +16,8 @@ import {
 export async function resolveContact(
   db: DB,
   ref: string,
-  config?: any,
-): Promise<any | null> {
+  config?: CRMConfig,
+): Promise<Contact | null> {
   // By ID
   if (ref.startsWith('ct_')) {
     const results = await db
@@ -127,8 +129,8 @@ export async function resolveContact(
 export async function resolveCompany(
   db: DB,
   ref: string,
-  config?: any,
-): Promise<any | null> {
+  config?: CRMConfig,
+): Promise<Company | null> {
   // By ID
   if (ref.startsWith('co_')) {
     const results = await db
@@ -184,7 +186,7 @@ export async function resolveCompany(
   return null
 }
 
-export async function resolveDeal(db: DB, ref: string): Promise<any | null> {
+export async function resolveDeal(db: DB, ref: string): Promise<Deal | null> {
   if (ref.startsWith('dl_')) {
     const results = await db
       .select()
@@ -198,8 +200,8 @@ export async function resolveDeal(db: DB, ref: string): Promise<any | null> {
 export async function resolveEntity(
   db: DB,
   ref: string,
-  config?: any,
-): Promise<{ type: string; entity: any } | null> {
+  config?: CRMConfig,
+): Promise<{ type: string; entity: Contact | Company | Deal } | null> {
   // Try contact first
   const contact = await resolveContact(db, ref, config)
   if (contact) {
@@ -224,8 +226,8 @@ export async function resolveEntity(
 export async function resolveCompanyForLink(
   db: DB,
   ref: string,
-  _config?: any,
-): Promise<any | null> {
+  _config?: CRMConfig,
+): Promise<Company | null> {
   // Try by ID
   if (ref.startsWith('co_')) {
     const results = await db
@@ -260,7 +262,7 @@ export async function resolveCompanyForLink(
 export async function resolveContactForLink(
   db: DB,
   ref: string,
-  config?: any,
-): Promise<any | null> {
+  config?: CRMConfig,
+): Promise<Contact | null> {
   return await resolveContact(db, ref, config)
 }

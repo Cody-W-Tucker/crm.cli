@@ -1,28 +1,34 @@
+import type { CRMConfig } from './config'
+import type { Activity, Company, Contact, Deal } from './drizzle-schema'
 import { formatPhone } from './normalize.ts'
 
-export function formatOutput(data: any, format: string, config?: any): string {
+export function formatOutput(
+  data: Record<string, unknown> | Record<string, unknown>[],
+  format: string,
+  config?: CRMConfig,
+): string {
   switch (format) {
     case 'json':
       return JSON.stringify(data, null, 2)
     case 'csv':
-      return formatCSV(data)
+      return formatCSV(data as Record<string, unknown>[])
     case 'tsv':
-      return formatTSV(data)
+      return formatTSV(data as Record<string, unknown>[])
     case 'ids':
-      return formatIDs(data)
+      return formatIDs(data as Record<string, unknown>[])
     default:
       return formatTable(data, config)
   }
 }
 
-function formatIDs(data: any[]): string {
+function formatIDs(data: Record<string, unknown>[]): string {
   if (!Array.isArray(data)) {
     return ''
   }
   return data.map((r) => r.id).join('\n')
 }
 
-function formatCSV(data: any[]): string {
+function formatCSV(data: Record<string, unknown>[]): string {
   if (!Array.isArray(data) || data.length === 0) {
     return ''
   }
@@ -52,7 +58,7 @@ function csvEscape(s: string): string {
   return s
 }
 
-function formatTSV(data: any[]): string {
+function formatTSV(data: Record<string, unknown>[]): string {
   if (!Array.isArray(data) || data.length === 0) {
     return ''
   }
@@ -75,12 +81,14 @@ function formatTSV(data: any[]): string {
   return [header, ...rows].join('\n')
 }
 
-function formatTable(data: any, _config?: any): string {
+function formatTable(
+  data: Record<string, unknown> | Record<string, unknown>[],
+  _config?: CRMConfig,
+): string {
   if (!data || (Array.isArray(data) && data.length === 0)) {
     return ''
   }
   if (!Array.isArray(data)) {
-    // Single entity display
     return formatEntityDetail(data)
   }
   const keys = Object.keys(data[0])
@@ -96,13 +104,13 @@ function formatTable(data: any, _config?: any): string {
   }
   const header = keys.map((k) => k.padEnd(widths[k])).join('  ')
   const separator = keys.map((k) => '─'.repeat(widths[k])).join('──')
-  const rows = data.map((row: any) =>
+  const rows = data.map((row) =>
     keys.map((k) => displayValue(row[k]).padEnd(widths[k])).join('  '),
   )
   return [header, separator, ...rows].join('\n')
 }
 
-function displayValue(v: any): string {
+function displayValue(v: unknown): string {
   if (v === null || v === undefined) {
     return ''
   }
@@ -115,7 +123,7 @@ function displayValue(v: any): string {
   return String(v)
 }
 
-function formatEntityDetail(entity: any): string {
+function formatEntityDetail(entity: Record<string, unknown>): string {
   const lines: string[] = []
   for (const [key, value] of Object.entries(entity)) {
     if (value === null || value === undefined) {
@@ -145,12 +153,15 @@ function formatEntityDetail(entity: any): string {
   return lines.join('\n')
 }
 
-export function contactToRow(c: any, config?: any): any {
+export function contactToRow(
+  c: Contact,
+  config?: CRMConfig,
+): Record<string, unknown> {
   const emails: string[] = safeJSON(c.emails)
   const phones: string[] = safeJSON(c.phones)
   const companies: string[] = safeJSON(c.companies)
   const tags: string[] = safeJSON(c.tags)
-  const custom: Record<string, any> = safeJSON(c.custom_fields)
+  const custom: Record<string, unknown> = safeJSON(c.custom_fields)
   const _displayPhones = phones.map((p) =>
     formatPhone(
       p,
@@ -175,7 +186,10 @@ export function contactToRow(c: any, config?: any): any {
   }
 }
 
-export function contactToDisplay(c: any, config?: any): any {
+export function contactToDisplay(
+  c: Contact,
+  config?: CRMConfig,
+): Record<string, unknown> {
   const row = contactToRow(c, config)
   const phones: string[] = safeJSON(c.phones)
   row._display_phones = phones.map((p) =>
@@ -188,7 +202,10 @@ export function contactToDisplay(c: any, config?: any): any {
   return row
 }
 
-export function companyToRow(c: any, _config?: any): any {
+export function companyToRow(
+  c: Company,
+  _config?: CRMConfig,
+): Record<string, unknown> {
   return {
     id: c.id,
     name: c.name,
@@ -201,7 +218,10 @@ export function companyToRow(c: any, _config?: any): any {
   }
 }
 
-export function dealToRow(d: any, _config?: any): any {
+export function dealToRow(
+  d: Deal,
+  _config?: CRMConfig,
+): Record<string, unknown> {
   return {
     id: d.id,
     title: d.title,
@@ -218,7 +238,7 @@ export function dealToRow(d: any, _config?: any): any {
   }
 }
 
-export function activityToRow(a: any): any {
+export function activityToRow(a: Activity): Record<string, unknown> {
   return {
     id: a.id,
     type: a.type,
@@ -231,7 +251,8 @@ export function activityToRow(a: any): any {
   }
 }
 
-export function safeJSON(val: any): any {
+// biome-ignore lint/suspicious/noExplicitAny: parses unknown JSON strings into arbitrary structures
+export function safeJSON(val: string | null | undefined): any {
   if (val === null || val === undefined) {
     if (typeof val === 'string') {
       return val

@@ -1,3 +1,4 @@
+import type { InferSelectModel } from 'drizzle-orm'
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const contacts = sqliteTable('contacts', {
@@ -52,3 +53,8 @@ export const activities = sqliteTable('activities', {
   custom_fields: text('custom_fields').notNull().default('{}'),
   created_at: text('created_at').notNull(),
 })
+
+export type Contact = InferSelectModel<typeof contacts>
+export type Company = InferSelectModel<typeof companies>
+export type Deal = InferSelectModel<typeof deals>
+export type Activity = InferSelectModel<typeof activities>

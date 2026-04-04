@@ -42,14 +42,20 @@ function parseSingleCondition(expr: string): FilterCondition {
   throw new Error(`Invalid filter expression: ${expr}`)
 }
 
-export function applyFilter(row: any, filter: FilterGroup): boolean {
+export function applyFilter(
+  row: Record<string, unknown>,
+  filter: FilterGroup,
+): boolean {
   if (filter.logic === 'AND') {
     return filter.conditions.every((c) => matchCondition(row, c))
   }
   return filter.conditions.some((c) => matchCondition(row, c))
 }
 
-function matchCondition(row: any, condition: FilterCondition): boolean {
+function matchCondition(
+  row: Record<string, unknown>,
+  condition: FilterCondition,
+): boolean {
   const { field, op, value } = condition
   let fieldValue = row[field]
 

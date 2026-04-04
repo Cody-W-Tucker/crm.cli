@@ -34,13 +34,14 @@ registerDupesCommand(program)
 
 try {
   program.parse(['node', 'crm', ...cleanArgv])
-} catch (e: any) {
-  if (e.exitCode !== undefined && e.exitCode === 0) {
+} catch (e: unknown) {
+  const err = e as { exitCode?: number; message?: string }
+  if (err.exitCode !== undefined && err.exitCode === 0) {
     process.exit(0)
   }
-  if (e.exitCode !== undefined) {
-    process.exit(e.exitCode)
+  if (err.exitCode !== undefined) {
+    process.exit(err.exitCode)
   }
-  console.error(e.message || e)
+  console.error(err.message || e)
   process.exit(1)
 }

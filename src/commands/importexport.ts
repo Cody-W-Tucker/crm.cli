@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 
 import type { DB } from '../db'
 import { upsertSearchIndex } from '../db'
+import type { Contact } from '../drizzle-schema'
 import * as schema from '../drizzle-schema'
 import {
   activityToRow,
@@ -94,7 +95,7 @@ export function registerImportExportCommands(program: Command) {
           const companies = splitField(rec.company || rec.companies)
           const tags = splitField(rec.tags)
           // Check for existing by email
-          let existing: any = null
+          let existing: Contact | null = null
           for (const e of emails) {
             existing = await findContactByEmail(db, e)
             if (existing) {
@@ -106,7 +107,9 @@ export function registerImportExportCommands(program: Command) {
             continue
           }
           if (existing && opts.update) {
-            const custom: Record<string, any> = safeJSON(existing.custom_fields)
+            const custom: Record<string, unknown> = safeJSON(
+              existing.custom_fields,
+            )
             for (const [k, v] of Object.entries(rec)) {
               if (!CONTACT_FIELDS.has(k) && v) {
                 custom[k] = v
@@ -141,7 +144,7 @@ export function registerImportExportCommands(program: Command) {
           }
           const id = makeId('ct')
           const n = now()
-          const custom: Record<string, any> = {}
+          const custom: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(rec)) {
             if (!CONTACT_FIELDS.has(k) && v) {
               custom[k] = v
@@ -175,12 +178,12 @@ export function registerImportExportCommands(program: Command) {
           const row = results[0]
           await upsertSearchIndex(db, 'contact', id, buildContactSearch(row))
           imported++
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (opts.skipErrors) {
             errors++
             continue
           }
-          die(`Error importing row: ${e.message}`)
+          die(`Error importing row: ${(e as Error).message}`)
         }
       }
       console.log(
@@ -217,7 +220,7 @@ export function registerImportExportCommands(program: Command) {
             return n || p
           })
           const tags = splitField(rec.tags)
-          const custom: Record<string, any> = {}
+          const custom: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(rec)) {
             if (!COMPANY_FIELDS.has(k) && v) {
               custom[k] = v
@@ -247,11 +250,11 @@ export function registerImportExportCommands(program: Command) {
           const row = results[0]
           await upsertSearchIndex(db, 'company', id, buildCompanySearch(row))
           imported++
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (opts.skipErrors) {
             continue
           }
-          die(`Error: ${e.message}`)
+          die(`Error: ${(e as Error).message}`)
         }
       }
       console.log(`Imported: ${imported}`)
@@ -277,7 +280,7 @@ export function registerImportExportCommands(program: Command) {
           const stage = rec.stage || config.pipeline.stages[0]
           const value = rec.value ? Number(rec.value) : null
           const tags = splitField(rec.tags)
-          const custom: Record<string, any> = {}
+          const custom: Record<string, unknown> = {}
           for (const [k, v] of Object.entries(rec)) {
             if (!DEAL_FIELDS.has(k) && v) {
               custom[k] = v
@@ -311,11 +314,11 @@ export function registerImportExportCommands(program: Command) {
           const row = results[0]
           await upsertSearchIndex(db, 'deal', id, buildDealSearch(row))
           imported++
-        } catch (e: any) {
+        } catch (e: unknown) {
           if (opts.skipErrors) {
             continue
           }
-          die(`Error: ${e.message}`)
+          die(`Error: ${(e as Error).message}`)
         }
       }
       console.log(`Imported: ${imported}`)
@@ -412,7 +415,10 @@ function splitField(val: string | undefined): string[] {
     .filter(Boolean)
 }
 
-async function findContactByEmail(db: DB, email: string): Promise<any | null> {
+async function findContactByEmail(
+  db: DB,
+  email: string,
+): Promise<Contact | null> {
   const all = await db.select().from(schema.contacts)
   for (const c of all) {
     const emails: string[] = safeJSON(c.emails)

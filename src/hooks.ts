@@ -5,7 +5,7 @@ import type { CRMConfig } from './config.ts'
 export function runHook(
   config: CRMConfig,
   hookName: string,
-  data: any,
+  data: Record<string, unknown>,
 ): boolean {
   const hookCmd = config.hooks[hookName]
   if (!hookCmd) {

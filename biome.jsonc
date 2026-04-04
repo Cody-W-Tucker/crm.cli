@@ -24,7 +24,7 @@
   "linter": {
     "rules": {
       "suspicious": {
-        "noExplicitAny": "off"
+        "noExplicitAny": "error"
       },
       "complexity": {
         "noExcessiveCognitiveComplexity": "off"
@@ -52,7 +52,8 @@
             "noNonNullAssertion": "off"
           },
           "suspicious": {
-            "noEmptyBlockStatements": "off"
+            "noEmptyBlockStatements": "off",
+            "noExplicitAny": "off"
           }
         }
       }

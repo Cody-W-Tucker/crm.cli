@@ -1,8 +1,16 @@
 import type { Command } from 'commander'
 
+import type { Company, Contact } from '../drizzle-schema'
 import * as schema from '../drizzle-schema'
 import { companyToRow, contactToRow, safeJSON } from '../format'
 import { getCtx, levenshtein } from '../lib/helpers'
+
+interface DupeResult {
+  left: Record<string, unknown>
+  reasons: string[]
+  right: Record<string, unknown>
+  score: number
+}
 
 export function registerDupesCommand(program: Command) {
   program
@@ -14,7 +22,7 @@ export function registerDupesCommand(program: Command) {
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
       const threshold = Number(opts.threshold)
-      let results: any[] = []
+      let results: DupeResult[] = []
 
       if (!opts.type || opts.type === 'contact') {
         const contacts = await db.select().from(schema.contacts)
@@ -84,7 +92,9 @@ export function registerDupesCommand(program: Command) {
     })
 }
 
-function contactDupeReasons(a: any, b: any): string[] {
+type SocialField = 'linkedin' | 'x' | 'bluesky' | 'telegram'
+
+function contactDupeReasons(a: Contact, b: Contact): string[] {
   const reasons: string[] = []
   const aName = (a.name || '').toLowerCase()
   const bName = (b.name || '').toLowerCase()
@@ -128,10 +138,13 @@ function contactDupeReasons(a: any, b: any): string[] {
   }
 
   // Similar social handles
-  for (const field of ['linkedin', 'x', 'bluesky', 'telegram']) {
+  const socialFields: SocialField[] = ['linkedin', 'x', 'bluesky', 'telegram']
+  for (const field of socialFields) {
     if (a[field] && b[field]) {
-      const dist = levenshtein(a[field].toLowerCase(), b[field].toLowerCase())
-      const ml = Math.max(a[field].length, b[field].length)
+      const aVal = a[field] as string
+      const bVal = b[field] as string
+      const dist = levenshtein(aVal.toLowerCase(), bVal.toLowerCase())
+      const ml = Math.max(aVal.length, bVal.length)
       if (ml > 0 && 1 - dist / ml >= 0.6) {
         reasons.push(`similar ${field}`)
       }
@@ -167,7 +180,7 @@ function contactDupeReasons(a: any, b: any): string[] {
   return reasons
 }
 
-function companyDupeReasons(a: any, b: any): string[] {
+function companyDupeReasons(a: Company, b: Company): string[] {
   const reasons: string[] = []
   const aName = (a.name || '').toLowerCase()
   const bName = (b.name || '').toLowerCase()

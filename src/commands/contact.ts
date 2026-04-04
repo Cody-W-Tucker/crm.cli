@@ -56,8 +56,8 @@ export function registerContactCommands(program: Command) {
           const norm = normalizePhone(p, config.phone.default_country)
           await checkDupePhone(db, norm, 'contacts')
           phones.push(norm)
-        } catch (e: any) {
-          die(`Error: invalid phone — ${e.message}`)
+        } catch (e: unknown) {
+          die(`Error: invalid phone — ${(e as Error).message}`)
         }
       }
       const linkedin = opts.linkedin
@@ -201,7 +201,7 @@ export function registerContactCommands(program: Command) {
       let phones: string[] = safeJSON(c.phones)
       let companies: string[] = safeJSON(c.companies)
       let tags: string[] = safeJSON(c.tags)
-      const custom: Record<string, any> = safeJSON(c.custom_fields)
+      const custom: Record<string, unknown> = safeJSON(c.custom_fields)
       let name = c.name,
         linkedin = c.linkedin,
         x = c.x,

@@ -1,11 +1,18 @@
 import type { Command } from 'commander'
 import { eq, sql } from 'drizzle-orm'
 
+import type { CRMConfig } from '../config'
 import type { DB } from '../db'
 import { rebuildSearchIndex } from '../db'
 import * as schema from '../drizzle-schema'
 import { activityToRow, companyToRow, contactToRow, dealToRow } from '../format'
 import { getCtx } from '../lib/helpers'
+
+interface FTSRow {
+  content: string
+  entity_id: string
+  entity_type: string
+}
 
 export function registerSearchCommands(program: Command) {
   program
@@ -15,11 +22,11 @@ export function registerSearchCommands(program: Command) {
     .option('--type <type>')
     .action(async (query, opts) => {
       const { db, config, fmt } = await getCtx()
-      const results: any[] = []
+      const results: Record<string, unknown>[] = []
       try {
         const ftsRows = (await db.all(
           sql`SELECT * FROM search_index WHERE content MATCH ${query}`,
-        )) as any[]
+        )) as FTSRow[]
         for (const fr of ftsRows) {
           if (opts.type && fr.entity_type !== opts.type) {
             continue
@@ -38,7 +45,7 @@ export function registerSearchCommands(program: Command) {
         // FTS5 match can fail on certain queries, fall back to LIKE
         const likeRows = (await db.all(
           sql`SELECT * FROM search_index WHERE content LIKE ${`%${query}%`}`,
-        )) as any[]
+        )) as FTSRow[]
         for (const fr of likeRows) {
           if (opts.type && fr.entity_type !== opts.type) {
             continue
@@ -89,8 +96,10 @@ export function registerSearchCommands(program: Command) {
     .action(async (query, opts) => {
       const { db, config, fmt } = await getCtx()
       const queryWords = query.toLowerCase().split(/\s+/)
-      const allEntities: any[] = []
-      const indexRows = (await db.all(sql`SELECT * FROM search_index`)) as any[]
+      const allEntities: (FTSRow & { score: number })[] = []
+      const indexRows = (await db.all(
+        sql`SELECT * FROM search_index`,
+      )) as FTSRow[]
       for (const row of indexRows) {
         if (opts.type && row.entity_type !== opts.type) {
           continue
@@ -119,7 +128,7 @@ export function registerSearchCommands(program: Command) {
       )
       const results = (await Promise.all(resultPromises)).filter(
         Boolean,
-      ) as any[]
+      ) as Record<string, unknown>[]
       if (fmt === 'json') {
         console.log(JSON.stringify(results, null, 2))
       } else {
@@ -139,7 +148,7 @@ export function registerSearchCommands(program: Command) {
     const { db } = await getCtx()
     const countRows = (await db.all(
       sql`SELECT entity_type, COUNT(*) as cnt FROM search_index GROUP BY entity_type`,
-    )) as any[]
+    )) as { entity_type: string; cnt: number }[]
     const counts: Record<string, number> = {}
     for (const r of countRows) {
       counts[r.entity_type] = r.cnt
@@ -173,8 +182,8 @@ async function lookupEntity(
   db: DB,
   entityType: string,
   id: string,
-  config: any,
-): Promise<any | null> {
+  config: CRMConfig,
+): Promise<Record<string, unknown> | null> {
   if (entityType === 'contact') {
     const results = await db
       .select()

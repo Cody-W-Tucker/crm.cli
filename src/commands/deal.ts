@@ -183,7 +183,7 @@ export function registerDealCommands(program: Command) {
       const value = opts.value === undefined ? d.value : Number(opts.value)
       let contacts: string[] = safeJSON(d.contacts)
       let tags: string[] = safeJSON(d.tags)
-      const custom: Record<string, any> = safeJSON(d.custom_fields)
+      const custom: Record<string, unknown> = safeJSON(d.custom_fields)
       for (const r of opts.addContact) {
         const ct = await resolveContact(db, r, config)
         if (!ct) {

@@ -4,6 +4,7 @@ import { ulid } from 'ulid'
 import { type CRMConfig, loadConfig } from '../config'
 import type { DB } from '../db'
 import { openDB, upsertSearchIndex } from '../db'
+import type { Company, Contact, Deal } from '../drizzle-schema'
 import * as schema from '../drizzle-schema'
 import { companyToRow, contactToRow, dealToRow, safeJSON } from '../format'
 import { formatPhone } from '../normalize'
@@ -151,7 +152,7 @@ export async function checkDupePhone(
     const phones: string[] = safeJSON(c.phones)
     if (phones.includes(phone)) {
       die(
-        `Error: duplicate phone "${phone}" — already belongs to ${(c as any).name || (c as any).title} (${c.id})`,
+        `Error: duplicate phone "${phone}" — already belongs to ${c.name} (${c.id})`,
       )
     }
   }
@@ -195,7 +196,7 @@ export async function checkDupeSocial(
   }
 }
 
-export function buildContactSearch(c: any): string {
+export function buildContactSearch(c: Contact): string {
   return [
     c.name,
     c.emails,
@@ -212,7 +213,7 @@ export function buildContactSearch(c: any): string {
     .join(' ')
 }
 
-export function buildCompanySearch(co: any): string {
+export function buildCompanySearch(co: Company): string {
   return [
     co.name,
     co.websites,
@@ -224,7 +225,7 @@ export function buildCompanySearch(co: any): string {
     .join(' ')
 }
 
-export function buildDealSearch(d: any): string {
+export function buildDealSearch(d: Deal): string {
   return [d.title, d.stage, JSON.stringify(safeJSON(d.custom_fields)), d.tags]
     .filter(Boolean)
     .join(' ')
@@ -232,9 +233,9 @@ export function buildDealSearch(d: any): string {
 
 export async function contactDetail(
   db: DB,
-  c: any,
+  c: Contact,
   config: CRMConfig,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const row = contactToRow(c, config)
   const phones: string[] = safeJSON(c.phones)
   row._display_phones = phones.map((p) =>
@@ -252,9 +253,9 @@ export async function contactDetail(
 
 export async function companyDetail(
   db: DB,
-  co: any,
+  co: Company,
   config: CRMConfig,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const row = companyToRow(co, config)
   const phones: string[] = safeJSON(co.phones)
   row._display_phones = phones.map((p) =>
@@ -282,9 +283,9 @@ export async function companyDetail(
 
 export async function dealDetail(
   db: DB,
-  d: any,
+  d: Deal,
   config: CRMConfig,
-): Promise<any> {
+): Promise<Record<string, unknown>> {
   const row = dealToRow(d, config)
   const contactIds: string[] = safeJSON(d.contacts)
   const contactPromises = contactIds.map(async (cid) => {
@@ -329,7 +330,7 @@ export async function dealDetail(
   return row
 }
 
-export function showEntity(detail: any, fmt: string) {
+export function showEntity(detail: Record<string, unknown>, fmt: string) {
   if (fmt === 'json') {
     console.log(JSON.stringify(detail, null, 2))
     return

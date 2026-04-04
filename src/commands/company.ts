@@ -51,8 +51,8 @@ export function registerCompanyCommands(program: Command) {
           const norm = normalizePhone(p, config.phone.default_country)
           await checkDupePhone(db, norm, 'companies')
           phones.push(norm)
-        } catch (e: any) {
-          die(`Error: invalid phone — ${e.message}`)
+        } catch (e: unknown) {
+          die(`Error: invalid phone — ${(e as Error).message}`)
         }
       }
       const custom = parseKV(opts.set)
@@ -133,7 +133,7 @@ export function registerCompanyCommands(program: Command) {
       let websites: string[] = safeJSON(co.websites)
       let phones: string[] = safeJSON(co.phones)
       let tags: string[] = safeJSON(co.tags)
-      const custom: Record<string, any> = safeJSON(co.custom_fields)
+      const custom: Record<string, unknown> = safeJSON(co.custom_fields)
       let name = co.name
       if (opts.name) {
         name = opts.name
