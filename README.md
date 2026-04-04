@@ -198,8 +198,8 @@ Organizations that contacts belong to.
 #### `crm company add`
 
 ```bash
-crm company add --name "Acme Corp" --domain acme.com
-crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
+crm company add --name "Acme Corp" --website https://acme.com
+crm company add --name "Acme Corp" --website https://acme.com --website https://acme.co.uk --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
 ```
 
 | Flag | Required | Description |
@@ -368,7 +368,7 @@ crm log email jane@acme.com "Sent proposal PDF"
 | Argument | Description |
 |----------|-------------|
 | `type` | One of: `note`, `call`, `meeting`, `email` |
-| `entity-ref` | Contact ID/email/phone, company ID/domain/phone, or deal ID |
+| `entity-ref` | Contact ID/email/phone, company ID/website/phone, or deal ID |
 | `note` | Free-text description |
 
 | Flag | Description |
@@ -607,7 +607,7 @@ JSON files expect an array of objects with the same field names.
 |------|-------------|
 | `--dry-run` | Preview what would be imported without writing |
 | `--skip-errors` | Continue on invalid rows instead of aborting |
-| `--update` | Update existing records (match by email/domain) instead of skipping duplicates |
+| `--update` | Update existing records (match by email/website host) instead of skipping duplicates |
 
 #### `crm export <entity-type>`
 
@@ -754,7 +754,7 @@ display = "international"
 
 ## Domain Normalization
 
-Company domains are normalized on input for consistent storage, deduplication, and lookup:
+Company websites are normalized on input for consistent storage, deduplication, and lookup:
 
 - Strip protocol (`https://`, `http://`)
 - Strip `www.` prefix
@@ -762,42 +762,42 @@ Company domains are normalized on input for consistent storage, deduplication, a
 - Strip trailing slash and path
 
 ```bash
-crm company add --name "Acme" --domain "https://www.Acme.com/about"
-# Stored as: acme.com
+crm company add --name "Acme" --website "https://www.Acme.com/about"
+# Stored as normalized host: acme.com
 ```
 
-**Dedup:** Exact match after normalization = duplicate. The same normalized domain cannot belong to two different companies:
+**Dedup:** Exact match after normalization = duplicate. The same normalized website host cannot belong to two different companies:
 
 ```bash
-crm company add --name "Acme Corp" --domain "acme.com"
-crm company add --name "Acme Inc" --domain "www.acme.com"    # fails: duplicate domain
+crm company add --name "Acme Corp" --website "acme.com"
+crm company add --name "Acme Inc" --website "www.acme.com"    # fails: duplicate website host
 ```
 
-**Subdomains are distinct.** Subsidiaries or regional offices often use subdomains of a shared root domain. These are treated as separate domains — not collapsed:
+**Subdomains are distinct.** Subsidiaries or regional offices often use subdomains of a shared root host. These are treated as separate website hosts — not collapsed:
 
 ```bash
-crm company add --name "Acme US" --domain "us.acme.com"
-crm company add --name "Acme EU" --domain "eu.acme.com"      # allowed — different subdomain
-crm company add --name "Acme Global" --domain "acme.com"     # allowed — root domain is distinct
+crm company add --name "Acme US" --website "us.acme.com"
+crm company add --name "Acme EU" --website "eu.acme.com"      # allowed — different subdomain
+crm company add --name "Acme Global" --website "acme.com"     # allowed — root host is distinct
 ```
 
 **Different TLDs are distinct:**
 
 ```bash
-crm company add --name "Acme Corp" --domain "acme.com"
-crm company add --name "Acme UK" --domain "acme.co.uk"       # allowed — different TLD
+crm company add --name "Acme Corp" --website "acme.com"
+crm company add --name "Acme UK" --website "acme.co.uk"       # allowed — different TLD
 ```
 
-**Lookup:** Any input format resolves to the normalized domain:
+**Lookup:** Any input format resolves to the normalized website host:
 
 ```bash
 crm company show "https://www.acme.com"    # finds acme.com
 crm company show "ACME.COM"                # finds acme.com
 ```
 
-Uses [`normalize-url`](https://github.com/sindresorhus/normalize-url) for robust URL/domain normalization.
+Uses [`normalize-url`](https://github.com/sindresorhus/normalize-url) for robust website normalization.
 
-**FUSE:** `_by-website/` symlinks use the normalized form (`acme.com.json`, not `www.acme.com.json`).
+**FUSE:** `_by-website/` symlinks use the normalized host (`acme.com.json`, not `www.acme.com.json`).
 
 ---
 
