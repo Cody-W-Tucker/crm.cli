@@ -683,6 +683,221 @@ Commands that accept an entity reference also accept email (contacts) or domain 
 
 ---
 
+## Virtual Filesystem (FUSE)
+
+Mount the CRM as a read/write filesystem. AI agents (or humans) can explore CRM data using standard file operations — `ls`, `cat`, `find`, `grep`.
+
+### Mount
+
+```bash
+crm mount ~/crm                         # mount with default DB
+crm mount ~/crm --db ./team.db          # mount a specific database
+crm mount ~/crm --readonly              # read-only mode (no writes)
+crm unmount ~/crm                       # unmount
+```
+
+The mount point stays live — changes made via the CLI or filesystem are reflected immediately in both directions.
+
+### Filesystem Layout
+
+```
+~/crm/
+├── contacts/
+│   ├── ct_01J8Z...jane-doe.json           # full contact as JSON
+│   ├── ct_02K9A...john-smith.json
+│   ├── _by-email/                         # symlinks for email lookup
+│   │   ├── jane@acme.com.json → ../ct_01J8Z...jane-doe.json
+│   │   └── john@globex.com.json → ../ct_02K9A...john-smith.json
+│   ├── _by-company/                       # symlinks grouped by company
+│   │   └── acme-corp/
+│   │       └── ct_01J8Z...jane-doe.json → ../../ct_01J8Z...jane-doe.json
+│   └── _by-tag/                           # symlinks grouped by tag
+│       ├── hot-lead/
+│       │   └── ct_01J8Z...jane-doe.json → ../../ct_01J8Z...jane-doe.json
+│       └── enterprise/
+│           └── ct_01J8Z...jane-doe.json → ../../ct_01J8Z...jane-doe.json
+├── companies/
+│   ├── co_01J8Z...acme-corp.json
+│   ├── _by-domain/
+│   │   ├── acme.com.json → ../co_01J8Z...acme-corp.json
+│   │   └── acme.co.uk.json → ../co_01J8Z...acme-corp.json
+│   └── _by-tag/
+│       └── enterprise/
+│           └── co_01J8Z...acme-corp.json → ../../co_01J8Z...acme-corp.json
+├── deals/
+│   ├── dl_01J8Z...acme-enterprise.json
+│   ├── _by-stage/
+│   │   ├── lead/
+│   │   ├── qualified/
+│   │   ├── proposal/
+│   │   ├── negotiation/
+│   │   ├── closed-won/
+│   │   └── closed-lost/
+│   ├── _by-company/
+│   │   └── acme-corp/
+│   │       └── dl_01J8Z...acme-enterprise.json → ../../dl_01J8Z...acme-enterprise.json
+│   └── _by-tag/
+│       └── q2/
+├── activities/
+│   ├── ac_01J8Z...note-2026-04-01.json
+│   ├── _by-contact/
+│   │   └── ct_01J8Z...jane-doe/
+│   │       └── ac_01J8Z...note-2026-04-01.json → ../../ac_01J8Z...note-2026-04-01.json
+│   ├── _by-company/
+│   ├── _by-deal/
+│   └── _by-type/
+│       ├── note/
+│       ├── call/
+│       ├── meeting/
+│       └── email/
+├── pipeline.json                          # pipeline summary (read-only)
+├── reports/
+│   ├── pipeline.json                      # same as above
+│   ├── stale.json                         # stale contacts/deals
+│   ├── forecast.json                      # weighted forecast
+│   ├── conversion.json                    # stage conversion rates
+│   ├── velocity.json                      # time per stage
+│   ├── won.json                           # closed-won summary
+│   └── lost.json                          # closed-lost summary
+├── tags.json                              # all tags with counts
+└── search/                                # query by reading a "file"
+    └── <query>.json                       # cat ~/crm/search/"acme CTO".json
+```
+
+### File Format
+
+Each entity file is a self-contained JSON document with linked data inlined:
+
+```json
+// ~/crm/contacts/ct_01J8Z...jane-doe.json
+{
+  "id": "ct_01J8ZVXB3K...",
+  "name": "Jane Doe",
+  "emails": ["jane@acme.com", "jane.doe@gmail.com"],
+  "phones": ["+1-555-0100"],
+  "title": "CTO",
+  "company": {
+    "id": "co_01J8Z...",
+    "name": "Acme Corp"
+  },
+  "source": "conference",
+  "tags": ["hot-lead", "enterprise"],
+  "custom_fields": {
+    "linkedin": "linkedin.com/in/janedoe"
+  },
+  "deals": [
+    { "id": "dl_01J8Z...", "title": "Acme Enterprise", "stage": "qualified", "value": 50000 }
+  ],
+  "recent_activity": [
+    { "id": "ac_01J8Z...", "type": "note", "note": "Had a great intro call", "created_at": "2026-04-01T10:30:00Z" }
+  ],
+  "created_at": "2026-03-15T09:00:00Z",
+  "updated_at": "2026-04-01T10:30:00Z"
+}
+```
+
+### Read Operations
+
+```bash
+# Browse contacts
+ls ~/crm/contacts/
+cat ~/crm/contacts/ct_01J8Z...jane-doe.json
+
+# Look up by email
+cat ~/crm/contacts/_by-email/jane@acme.com.json
+
+# List all deals in a pipeline stage
+ls ~/crm/deals/_by-stage/qualified/
+
+# Get all contacts at a company
+ls ~/crm/contacts/_by-company/acme-corp/
+
+# Get all activities for a contact
+ls ~/crm/activities/_by-contact/ct_01J8Z...jane-doe/
+
+# Read pipeline report
+cat ~/crm/pipeline.json
+
+# Read stale report
+cat ~/crm/reports/stale.json
+
+# Search (read a virtual file whose name is the query)
+cat ~/crm/search/"fintech CTO".json
+
+# Use standard tools
+grep -r "enterprise" ~/crm/contacts/
+find ~/crm/deals/_by-stage/lead/ -name "*.json" | xargs jq '.value'
+```
+
+### Write Operations
+
+Writing a JSON file creates or updates the entity. The filename is ignored for creates — the ID is auto-generated.
+
+```bash
+# Create a new contact (write any filename — ID is auto-assigned)
+echo '{"name": "Bob Smith", "emails": ["bob@globex.com"]}' > ~/crm/contacts/new.json
+
+# Update an existing contact (write to its actual file)
+# Read, modify, write back:
+jq '.title = "VP Engineering"' ~/crm/contacts/ct_01J8Z...jane-doe.json | \
+  sponge ~/crm/contacts/ct_01J8Z...jane-doe.json
+
+# Delete a contact
+rm ~/crm/contacts/ct_01J8Z...jane-doe.json
+
+# Move a deal stage (update the stage field)
+jq '.stage = "closed-won"' ~/crm/deals/dl_01J8Z...acme-enterprise.json | \
+  sponge ~/crm/deals/dl_01J8Z...acme-enterprise.json
+
+# Log an activity (write to activities/)
+echo '{"type": "note", "entity_ref": "jane@acme.com", "note": "Follow up on proposal"}' \
+  > ~/crm/activities/new.json
+```
+
+### AI Agent Usage
+
+The filesystem is designed for agents that navigate via `ls`, `cat`, and `find`. An agent exploring CRM data might:
+
+```
+Agent: Let me check the pipeline.
+> cat ~/crm/pipeline.json
+
+Agent: Who are the contacts at Acme?
+> ls ~/crm/contacts/_by-company/acme-corp/
+> cat ~/crm/contacts/_by-company/acme-corp/ct_01J8Z...jane-doe.json
+
+Agent: What deals are stale?
+> cat ~/crm/reports/stale.json
+
+Agent: Let me search for that fintech CTO.
+> cat ~/crm/search/"fintech CTO london".json
+
+Agent: I'll update her title.
+> jq '.title = "CEO"' ~/crm/contacts/ct_01J8Z...jane-doe.json > /tmp/update.json
+> mv /tmp/update.json ~/crm/contacts/ct_01J8Z...jane-doe.json
+```
+
+### Configuration
+
+FUSE settings in `crm.toml`:
+
+```toml
+[mount]
+default_path = "~/crm"          # default mount point for `crm mount`
+readonly = false                 # default to read-write
+max_recent_activity = 10        # how many activities to inline in entity files
+search_limit = 20               # max results for search/ virtual files
+```
+
+### Platform Notes
+
+- **Linux:** Works out of the box (FUSE is in the kernel).
+- **macOS:** Requires [macFUSE](https://osxfuse.github.io/) or [FUSE-T](https://www.fuse-t.org/).
+- **Windows:** Not supported (use WSL).
+- **Containers/sandboxes:** FUSE requires `--privileged` or `--device /dev/fuse`. If unavailable, use the CLI with `--format json` instead.
+
+---
+
 ## Architecture
 
 ```
@@ -699,6 +914,7 @@ src/
     search.ts         Search + semantic find
     report.ts         Reports
     import-export.ts  CSV/JSON import/export
+    mount.ts          FUSE mount/unmount commands
   lib/
     format.ts         Output formatting (table, json, csv, tsv, ids)
     filter.ts         Filter expression parsing
@@ -708,6 +924,11 @@ src/
   search/
     fts.ts            FTS5 keyword search
     semantic.ts       Local embedding vector search
+  fuse/
+    fs.ts             FUSE filesystem implementation
+    layout.ts         Directory tree + symlink generation
+    read.ts           Read handlers (entity files, reports, search)
+    write.ts          Write handlers (create, update, delete)
 test/
   *.test.ts           Functional CLI tests (bun test)
 ```

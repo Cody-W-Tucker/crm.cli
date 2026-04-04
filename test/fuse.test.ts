@@ -1,0 +1,676 @@
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+
+import { type TestContext, createTestContext } from './helpers.ts'
+
+/**
+ * FUSE tests mount the CRM as a virtual filesystem and test read/write
+ * operations using standard file system calls.
+ *
+ * These tests require FUSE support on the host. They are skipped if
+ * `crm mount` fails (e.g. in containers without /dev/fuse).
+ */
+
+const CRM_BIN = join(import.meta.dir, '..', 'src', 'cli.ts')
+
+interface FuseTestContext extends TestContext {
+  mountPoint: string
+  mounted: boolean
+}
+
+function createFuseTestContext(): FuseTestContext {
+  const ctx = createTestContext() as FuseTestContext
+  ctx.mountPoint = join(ctx.dir, 'mnt')
+  mkdirSync(ctx.mountPoint)
+
+  // Attempt to mount. If FUSE is unavailable, mark as not mounted.
+  const proc = Bun.spawnSync(
+    ['bun', 'run', CRM_BIN, 'mount', ctx.mountPoint, '--db', ctx.dbPath],
+    { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+  )
+  ctx.mounted = proc.exitCode === 0
+
+  return ctx
+}
+
+function unmount(ctx: FuseTestContext) {
+  if (!ctx.mounted) return
+  Bun.spawnSync(
+    ['bun', 'run', CRM_BIN, 'unmount', ctx.mountPoint],
+    { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+  )
+}
+
+function skipIfNoFuse(ctx: FuseTestContext) {
+  if (!ctx.mounted) {
+    console.warn('FUSE not available — skipping test')
+    return true
+  }
+  return false
+}
+
+// ---------------------------------------------------------------------------
+// Directory structure
+// ---------------------------------------------------------------------------
+
+describe('fuse: directory layout', () => {
+  test('mount point contains expected top-level entries', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const entries = readdirSync(ctx.mountPoint)
+      expect(entries).toContain('contacts')
+      expect(entries).toContain('companies')
+      expect(entries).toContain('deals')
+      expect(entries).toContain('activities')
+      expect(entries).toContain('pipeline.json')
+      expect(entries).toContain('reports')
+      expect(entries).toContain('tags.json')
+      expect(entries).toContain('search')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('contacts/ has _by-email, _by-company, _by-tag subdirs', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const entries = readdirSync(join(ctx.mountPoint, 'contacts'))
+      expect(entries).toContain('_by-email')
+      expect(entries).toContain('_by-company')
+      expect(entries).toContain('_by-tag')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('companies/ has _by-domain, _by-tag subdirs', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const entries = readdirSync(join(ctx.mountPoint, 'companies'))
+      expect(entries).toContain('_by-domain')
+      expect(entries).toContain('_by-tag')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('deals/ has _by-stage, _by-company, _by-tag subdirs', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const entries = readdirSync(join(ctx.mountPoint, 'deals'))
+      expect(entries).toContain('_by-stage')
+      expect(entries).toContain('_by-company')
+      expect(entries).toContain('_by-tag')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('deals/_by-stage/ contains all configured pipeline stages', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const stages = readdirSync(join(ctx.mountPoint, 'deals', '_by-stage'))
+      expect(stages).toContain('lead')
+      expect(stages).toContain('qualified')
+      expect(stages).toContain('proposal')
+      expect(stages).toContain('negotiation')
+      expect(stages).toContain('closed-won')
+      expect(stages).toContain('closed-lost')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('activities/ has _by-contact, _by-company, _by-deal, _by-type subdirs', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const entries = readdirSync(join(ctx.mountPoint, 'activities'))
+      expect(entries).toContain('_by-contact')
+      expect(entries).toContain('_by-company')
+      expect(entries).toContain('_by-deal')
+      expect(entries).toContain('_by-type')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/ contains all report types', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const reports = readdirSync(join(ctx.mountPoint, 'reports'))
+      expect(reports).toContain('pipeline.json')
+      expect(reports).toContain('stale.json')
+      expect(reports).toContain('forecast.json')
+      expect(reports).toContain('conversion.json')
+      expect(reports).toContain('velocity.json')
+      expect(reports).toContain('won.json')
+      expect(reports).toContain('lost.json')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Reading entity files
+// ---------------------------------------------------------------------------
+
+describe('fuse: read contacts', () => {
+  test('contact file appears after CLI add', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'CTO')
+
+      const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      expect(files).toHaveLength(1)
+      expect(files[0]).toContain('jane-doe')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', files[0]), 'utf-8'))
+      expect(data.name).toBe('Jane Doe')
+      expect(data.emails).toContain('jane@acme.com')
+      expect(data.title).toBe('CTO')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('_by-email symlink resolves to correct contact', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', '_by-email', 'jane@acme.com.json'), 'utf-8'))
+      expect(data.name).toBe('Jane Doe')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('contact with multiple emails has multiple symlinks', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--email', 'jane@personal.com')
+
+      const byEmail = readdirSync(join(ctx.mountPoint, 'contacts', '_by-email'))
+      expect(byEmail).toContain('jane@acme.com.json')
+      expect(byEmail).toContain('jane@personal.com.json')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('_by-company groups contacts by company', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('company', 'add', '--name', 'Acme Corp')
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp')
+      ctx.runOK('contact', 'add', '--name', 'John', '--email', 'john@acme.com', '--company', 'Acme Corp')
+
+      const acmeDir = join(ctx.mountPoint, 'contacts', '_by-company', 'acme-corp')
+      const contacts = readdirSync(acmeDir)
+      expect(contacts).toHaveLength(2)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('_by-tag groups contacts by tag', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--tag', 'vip')
+      ctx.runOK('contact', 'add', '--name', 'Bob', '--tag', 'vip')
+      ctx.runOK('contact', 'add', '--name', 'Alice')
+
+      const vipDir = join(ctx.mountPoint, 'contacts', '_by-tag', 'vip')
+      const contacts = readdirSync(vipDir)
+      expect(contacts).toHaveLength(2)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('contact file includes linked deals and recent activity', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+      ctx.runOK('deal', 'add', '--title', 'Big Deal', '--value', '50000', '--contact', 'jane@acme.com')
+      ctx.runOK('log', 'note', 'jane@acme.com', 'Great call today')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', '_by-email', 'jane@acme.com.json'), 'utf-8'))
+      expect(data.deals).toHaveLength(1)
+      expect(data.deals[0].title).toBe('Big Deal')
+      expect(data.recent_activity).toHaveLength(1)
+      expect(data.recent_activity[0].note).toContain('Great call')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+describe('fuse: read companies', () => {
+  test('company file with linked contacts and deals', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp')
+      ctx.runOK('deal', 'add', '--title', 'Acme Deal', '--company', 'acme.com')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'companies', '_by-domain', 'acme.com.json'), 'utf-8'))
+      expect(data.name).toBe('Acme Corp')
+      expect(data.contacts.length).toBeGreaterThanOrEqual(1)
+      expect(data.deals.length).toBeGreaterThanOrEqual(1)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('company with multiple domains has multiple symlinks', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com', '--domain', 'acme.co.uk')
+
+      const byDomain = readdirSync(join(ctx.mountPoint, 'companies', '_by-domain'))
+      expect(byDomain).toContain('acme.com.json')
+      expect(byDomain).toContain('acme.co.uk.json')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+describe('fuse: read deals', () => {
+  test('deal file includes stage history', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const id = ctx.runOK('deal', 'add', '--title', 'Tracked Deal', '--stage', 'lead').trim()
+      ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+
+      const files = readdirSync(join(ctx.mountPoint, 'deals')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'deals', files[0]), 'utf-8'))
+      expect(data.stage).toBe('qualified')
+      expect(data.stage_history.length).toBeGreaterThanOrEqual(2)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('_by-stage symlinks reflect current stage', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('deal', 'add', '--title', 'Lead Deal', '--stage', 'lead')
+      ctx.runOK('deal', 'add', '--title', 'Qualified Deal', '--stage', 'qualified')
+
+      const leadDeals = readdirSync(join(ctx.mountPoint, 'deals', '_by-stage', 'lead'))
+      const qualDeals = readdirSync(join(ctx.mountPoint, 'deals', '_by-stage', 'qualified'))
+      expect(leadDeals).toHaveLength(1)
+      expect(qualDeals).toHaveLength(1)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('moving a deal updates _by-stage symlinks', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const id = ctx.runOK('deal', 'add', '--title', 'Moving Deal', '--stage', 'lead').trim()
+      expect(readdirSync(join(ctx.mountPoint, 'deals', '_by-stage', 'lead'))).toHaveLength(1)
+
+      ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+      expect(readdirSync(join(ctx.mountPoint, 'deals', '_by-stage', 'lead'))).toHaveLength(0)
+      expect(readdirSync(join(ctx.mountPoint, 'deals', '_by-stage', 'qualified'))).toHaveLength(1)
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Reports and search (read-only virtual files)
+// ---------------------------------------------------------------------------
+
+describe('fuse: reports', () => {
+  test('pipeline.json returns valid pipeline data', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('deal', 'add', '--title', 'A', '--value', '10000', '--stage', 'lead')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'pipeline.json'), 'utf-8'))
+      expect(Array.isArray(data)).toBe(true)
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0]).toHaveProperty('stage')
+      expect(data[0]).toHaveProperty('count')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/stale.json returns stale entities', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Stale Bob', '--email', 'bob@acme.com')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'reports', 'stale.json'), 'utf-8'))
+      expect(Array.isArray(data)).toBe(true)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('tags.json lists all tags with counts', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Alice', '--tag', 'vip')
+      ctx.runOK('contact', 'add', '--name', 'Bob', '--tag', 'vip')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'tags.json'), 'utf-8'))
+      const vipTag = data.find((t: { tag: string }) => t.tag === 'vip')
+      expect(vipTag).toBeDefined()
+      expect(vipTag.count).toBe(2)
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+describe('fuse: search', () => {
+  test('reading search/<query>.json returns results', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'search', 'Jane.json'), 'utf-8'))
+      expect(Array.isArray(data)).toBe(true)
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0].name).toBe('Jane Doe')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('search with no matches returns empty array', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'search', 'zzzznonexistent.json'), 'utf-8'))
+      expect(data).toEqual([])
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Write operations
+// ---------------------------------------------------------------------------
+
+describe('fuse: write operations', () => {
+  test('write new file to contacts/ creates a contact', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      writeFileSync(
+        join(ctx.mountPoint, 'contacts', 'new.json'),
+        JSON.stringify({ name: 'Bob Smith', emails: ['bob@globex.com'], title: 'Engineer' }),
+      )
+
+      // Verify via CLI.
+      const contacts = ctx.runJSON<Array<{ name: string }>>('contact', 'list', '--format', 'json')
+      expect(contacts).toHaveLength(1)
+      expect(contacts[0].name).toBe('Bob Smith')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('overwrite existing contact file updates the contact', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'Engineer')
+
+      const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      const filePath = join(ctx.mountPoint, 'contacts', files[0])
+      const data = JSON.parse(readFileSync(filePath, 'utf-8'))
+      data.title = 'CTO'
+      writeFileSync(filePath, JSON.stringify(data))
+
+      const show = ctx.runOK('contact', 'show', 'jane@acme.com')
+      expect(show).toContain('CTO')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('delete contact file via rm', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com').trim()
+
+      const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      unlinkSync(join(ctx.mountPoint, 'contacts', files[0]))
+
+      ctx.runFail('contact', 'show', id)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('write new file to activities/ creates an activity', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+
+      writeFileSync(
+        join(ctx.mountPoint, 'activities', 'new.json'),
+        JSON.stringify({ type: 'note', entity_ref: 'jane@acme.com', note: 'Follow up on proposal' }),
+      )
+
+      const activities = ctx.runJSON<unknown[]>('activity', 'list', '--contact', 'jane@acme.com', '--format', 'json')
+      expect(activities).toHaveLength(1)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('update deal stage via file write triggers stage tracking', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const id = ctx.runOK('deal', 'add', '--title', 'Test Deal', '--stage', 'lead', '--value', '10000').trim()
+
+      const files = readdirSync(join(ctx.mountPoint, 'deals')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      const filePath = join(ctx.mountPoint, 'deals', files[0])
+      const data = JSON.parse(readFileSync(filePath, 'utf-8'))
+      data.stage = 'qualified'
+      writeFileSync(filePath, JSON.stringify(data))
+
+      // Stage change should be tracked in history.
+      const show = ctx.runOK('deal', 'show', id)
+      expect(show).toContain('qualified')
+      expect(show).toContain('lead') // history should contain old stage
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('write new company file creates a company', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      writeFileSync(
+        join(ctx.mountPoint, 'companies', 'new.json'),
+        JSON.stringify({ name: 'Globex Corp', domains: ['globex.com'], industry: 'Manufacturing' }),
+      )
+
+      const companies = ctx.runJSON<Array<{ name: string }>>('company', 'list', '--format', 'json')
+      expect(companies).toHaveLength(1)
+      expect(companies[0].name).toBe('Globex Corp')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Read-only mode
+// ---------------------------------------------------------------------------
+
+describe('fuse: readonly mode', () => {
+  test('--readonly prevents writes', () => {
+    const ctx = createTestContext() as FuseTestContext
+    ctx.mountPoint = join(ctx.dir, 'mnt-ro')
+    mkdirSync(ctx.mountPoint)
+
+    const proc = Bun.spawnSync(
+      ['bun', 'run', CRM_BIN, 'mount', ctx.mountPoint, '--db', ctx.dbPath, '--readonly'],
+      { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+    )
+    ctx.mounted = proc.exitCode === 0
+    if (skipIfNoFuse(ctx)) return
+
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+
+      // Reading should work.
+      const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      expect(files).toHaveLength(1)
+
+      // Writing should fail.
+      expect(() => {
+        writeFileSync(
+          join(ctx.mountPoint, 'contacts', 'new.json'),
+          JSON.stringify({ name: 'Blocked' }),
+        )
+      }).toThrow()
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Lifecycle
+// ---------------------------------------------------------------------------
+
+describe('fuse: mount/unmount', () => {
+  test('mount creates the mountpoint if needed', () => {
+    const ctx = createTestContext()
+    const mp = join(ctx.dir, 'auto-created-mnt')
+
+    const proc = Bun.spawnSync(
+      ['bun', 'run', CRM_BIN, 'mount', mp, '--db', ctx.dbPath],
+      { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+    )
+    if (proc.exitCode !== 0) return // FUSE unavailable
+
+    expect(existsSync(mp)).toBe(true)
+
+    Bun.spawnSync(
+      ['bun', 'run', CRM_BIN, 'unmount', mp],
+      { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+    )
+  })
+
+  test('unmount cleans up', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+
+    unmount(ctx)
+
+    // After unmount, the mount point should be an empty directory (or not a FUSE mount).
+    const entries = readdirSync(ctx.mountPoint)
+    expect(entries).toHaveLength(0)
+  })
+
+  test('double mount to same path fails gracefully', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const proc = Bun.spawnSync(
+        ['bun', 'run', CRM_BIN, 'mount', ctx.mountPoint, '--db', ctx.dbPath],
+        { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+      )
+      expect(proc.exitCode).not.toBe(0)
+      expect(proc.stderr.toString()).toContain('already mounted')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Live sync: CLI changes appear in FS immediately
+// ---------------------------------------------------------------------------
+
+describe('fuse: live sync', () => {
+  test('CLI add appears in filesystem immediately', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const before = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      expect(before).toHaveLength(0)
+
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+
+      const after = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
+      expect(after).toHaveLength(1)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('CLI delete removes file from filesystem immediately', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      const id = ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com').trim()
+      expect(readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))).toHaveLength(1)
+
+      ctx.runOK('contact', 'rm', id, '--force')
+      expect(readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))).toHaveLength(0)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('filesystem write appears in CLI immediately', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      writeFileSync(
+        join(ctx.mountPoint, 'contacts', 'new.json'),
+        JSON.stringify({ name: 'FS Created', emails: ['fs@test.com'] }),
+      )
+
+      const show = ctx.runOK('contact', 'show', 'fs@test.com')
+      expect(show).toContain('FS Created')
+    } finally {
+      unmount(ctx)
+    }
+  })
+})
