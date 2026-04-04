@@ -752,6 +752,55 @@ display = "international"
 
 ---
 
+## Domain Normalization
+
+Company domains are normalized on input for consistent storage, deduplication, and lookup:
+
+- Strip protocol (`https://`, `http://`)
+- Strip `www.` prefix
+- Lowercase
+- Strip trailing slash and path
+
+```bash
+crm company add --name "Acme" --domain "https://www.Acme.com/about"
+# Stored as: acme.com
+```
+
+**Dedup:** Exact match after normalization = duplicate. The same normalized domain cannot belong to two different companies:
+
+```bash
+crm company add --name "Acme Corp" --domain "acme.com"
+crm company add --name "Acme Inc" --domain "www.acme.com"    # fails: duplicate domain
+```
+
+**Subdomains are distinct.** Subsidiaries or regional offices often use subdomains of a shared root domain. These are treated as separate domains — not collapsed:
+
+```bash
+crm company add --name "Acme US" --domain "us.acme.com"
+crm company add --name "Acme EU" --domain "eu.acme.com"      # allowed — different subdomain
+crm company add --name "Acme Global" --domain "acme.com"     # allowed — root domain is distinct
+```
+
+**Different TLDs are distinct:**
+
+```bash
+crm company add --name "Acme Corp" --domain "acme.com"
+crm company add --name "Acme UK" --domain "acme.co.uk"       # allowed — different TLD
+```
+
+**Lookup:** Any input format resolves to the normalized domain:
+
+```bash
+crm company show "https://www.acme.com"    # finds acme.com
+crm company show "ACME.COM"                # finds acme.com
+```
+
+Uses [`tldts`](https://github.com/nicolo-ribaudo/tldts) for robust domain parsing (IDN, edge cases).
+
+**FUSE:** `_by-domain/` symlinks use the normalized form (`acme.com.json`, not `www.acme.com.json`).
+
+---
+
 ## Filtering
 
 The `--filter` flag accepts expressions:
@@ -1088,6 +1137,7 @@ The CLI is a thin wrapper around a TypeScript library (`src/`). Other interfaces
 - **Language:** TypeScript (strict mode)
 - **Database:** SQLite via [libSQL](https://github.com/tursodatabase/libsql) + [Drizzle ORM](https://orm.drizzle.team)
 - **Phone normalization:** [libphonenumber-js](https://gitlab.com/nicolo-ribaudo/libphonenumber-js) (E.164)
+- **Domain normalization:** [tldts](https://github.com/nicolo-ribaudo/tldts)
 - **Validation:** [Zod](https://zod.dev)
 - **Linting:** [Biome](https://biomejs.dev) via [Ultracite](https://github.com/haydenbleasel/ultracite)
 - **Testing:** `bun test` (functional tests at the CLI level)
