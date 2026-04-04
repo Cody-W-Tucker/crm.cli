@@ -795,7 +795,7 @@ crm company show "https://www.acme.com"    # finds acme.com
 crm company show "ACME.COM"                # finds acme.com
 ```
 
-Uses [`tldts`](https://github.com/nicolo-ribaudo/tldts) for robust domain parsing (IDN, edge cases).
+Uses [`normalize-url`](https://github.com/sindresorhus/normalize-url) for robust URL/domain normalization.
 
 **FUSE:** `_by-domain/` symlinks use the normalized form (`acme.com.json`, not `www.acme.com.json`).
 
@@ -1137,7 +1137,7 @@ The CLI is a thin wrapper around a TypeScript library (`src/`). Other interfaces
 - **Language:** TypeScript (strict mode)
 - **Database:** SQLite via [libSQL](https://github.com/tursodatabase/libsql) + [Drizzle ORM](https://orm.drizzle.team)
 - **Phone normalization:** [libphonenumber-js](https://gitlab.com/nicolo-ribaudo/libphonenumber-js) (E.164)
-- **Domain normalization:** [tldts](https://github.com/nicolo-ribaudo/tldts)
+- **Domain normalization:** [normalize-url](https://github.com/sindresorhus/normalize-url)
 - **Validation:** [Zod](https://zod.dev)
 - **Linting:** [Biome](https://biomejs.dev) via [Ultracite](https://github.com/haydenbleasel/ultracite)
 - **Testing:** `bun test` (functional tests at the CLI level)
