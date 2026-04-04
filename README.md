@@ -193,7 +193,7 @@ Merges two contacts. Keeps the first, absorbs data from the second. Emails, phon
 
 ### Companies
 
-Organizations that contacts belong to. Companies store one or more websites (full URLs), not just bare domains.
+Organizations that contacts belong to.
 
 #### `crm company add`
 
@@ -220,22 +220,22 @@ crm company list --tag enterprise --sort name
 
 Same filtering/sorting flags as `crm contact list`.
 
-#### `crm company show <id-or-domain-or-phone>`
+#### `crm company show <id-or-website-or-phone>`
 
 ```bash
-crm company show acme.com
+crm company show https://acme.com
 crm company show co_01J8Z...
 crm company show "+1-212-555-1234"
 ```
 
 Accepts ID, any website URL/host, or any phone number. Shows company details plus all linked contacts and deals.
 
-#### `crm company edit <id-or-domain-or-phone>`
+#### `crm company edit <id-or-website-or-phone>`
 
 ```bash
-crm company edit acme.com --name "Acme Inc" --set industry=Fintech
-crm company edit co_01J8Z... --add-domain acme.co.uk --add-phone "+44-20-7946-0958"
-crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-415-555-0000"
+crm company edit https://acme.com --name "Acme Inc" --set industry=Fintech
+crm company edit co_01J8Z... --add-website https://acme.co.uk --add-phone "+44-20-7946-0958"
+crm company edit https://acme.com --rm-website https://old-acme.com --rm-phone "+1-415-555-0000"
 ```
 
 | Flag | Description |
@@ -250,7 +250,7 @@ crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-415-555-0000"
 | `--add-tag` | Add tag |
 | `--rm-tag` | Remove tag |
 
-#### `crm company rm <id-or-domain-or-phone>`
+#### `crm company rm <id-or-website-or-phone>`
 
 Same pattern as `crm contact rm`. Unlinks contacts and deals but does not delete them.
 
@@ -272,7 +272,7 @@ Pipeline tracking for opportunities.
 
 ```bash
 crm deal add --title "Acme Enterprise" --value 50000
-crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact jane@acme.com --company acme.com --expected-close 2026-06-01 --probability 60 --tag q2
+crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact jane@acme.com --company https://acme.com --expected-close 2026-06-01 --probability 60 --tag q2
 ```
 
 | Flag | Required | Description |
@@ -281,7 +281,7 @@ crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact
 | `--value` | no | Deal value in dollars (integer) |
 | `--stage` | no | Pipeline stage (default: first configured stage) |
 | `--contact` | no | Link contact by ID or email (multiple allowed) |
-| `--company` | no | Link company by ID or domain |
+| `--company` | no | Link company by ID or website |
 | `--expected-close` | no | Expected close date (`YYYY-MM-DD`) |
 | `--probability` | no | Win probability 0-100 |
 | `--tag` | no | Tag (multiple allowed) |
@@ -294,7 +294,7 @@ crm deal list
 crm deal list --stage qualified
 crm deal list --stage qualified --sort value --reverse
 crm deal list --contact jane@acme.com
-crm deal list --company acme.com
+crm deal list --company https://acme.com
 crm deal list --min-value 10000 --max-value 100000
 ```
 
