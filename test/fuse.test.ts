@@ -234,13 +234,13 @@ describe('fuse: read contacts', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
-      ctx.runOK('contact', 'add', '--name', 'Jane', '--linkedin', 'linkedin.com/in/janedoe', '--x', 'janedoe')
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--linkedin', 'janedoe', '--x', 'janedoe_x')
 
       const byLinkedin = readdirSync(join(ctx.mountPoint, 'contacts', '_by-linkedin'))
-      expect(byLinkedin).toHaveLength(1)
+      expect(byLinkedin).toContain('janedoe.json')
 
       const byX = readdirSync(join(ctx.mountPoint, 'contacts', '_by-x'))
-      expect(byX).toContain('janedoe.json')
+      expect(byX).toContain('janedoe_x.json')
     } finally {
       unmount(ctx)
     }
@@ -300,13 +300,13 @@ describe('fuse: read contacts', () => {
     if (skipIfNoFuse(ctx)) return
     try {
       ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
-      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp', '--linkedin', 'linkedin.com/in/janedoe', '--x', 'janedoe')
+      ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp', '--linkedin', 'janedoe', '--x', 'janedoe_x')
       ctx.runOK('deal', 'add', '--title', 'Big Deal', '--value', '50000', '--contact', 'jane@acme.com')
       ctx.runOK('log', 'note', 'jane@acme.com', 'Great call today')
 
       const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', '_by-email', 'jane@acme.com.json'), 'utf-8'))
-      expect(data.linkedin).toBe('linkedin.com/in/janedoe')
-      expect(data.x).toBe('janedoe')
+      expect(data.linkedin).toBe('janedoe')
+      expect(data.x).toBe('janedoe_x')
       expect(data.companies).toHaveLength(1)
       expect(data.companies[0].name).toBe('Acme Corp')
       expect(data.deals).toHaveLength(1)

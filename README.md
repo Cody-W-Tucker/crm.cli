@@ -105,7 +105,8 @@ People you interact with.
 ```bash
 crm contact add --name "Jane Doe" --email jane@acme.com
 crm contact add --name "Jane Doe" --email jane@acme.com --email jane.doe@gmail.com --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --company Acme --company "Acme Ventures" --tag hot-lead --tag enterprise
-crm contact add --name "Jane Doe" --email jane@acme.com --linkedin linkedin.com/in/janedoe --x janedoe --set title=CTO --set source=conference --set notes="Met at SaaStr"
+crm contact add --name "Jane Doe" --email jane@acme.com --linkedin janedoe --x janedoe --set title=CTO --set source=conference --set notes="Met at SaaStr"
+crm contact add --name "Jane Doe" --linkedin https://linkedin.com/in/janedoe   # URL input also works — handle is extracted
 ```
 
 | Flag | Required | Description |
@@ -115,15 +116,15 @@ crm contact add --name "Jane Doe" --email jane@acme.com --linkedin linkedin.com/
 | `--phone` | no | Phone number (repeatable — multiple allowed) |
 | `--company` | no | Company name (repeatable — links to existing or creates stub) |
 | `--tag` | no | Tag (repeatable — multiple allowed) |
-| `--linkedin` | no | LinkedIn URL or path (e.g. `linkedin.com/in/janedoe`) |
-| `--x` | no | X / Twitter handle (e.g. `janedoe`) |
-| `--bluesky` | no | Bluesky handle (e.g. `janedoe.bsky.social`) |
-| `--telegram` | no | Telegram username (e.g. `janedoe`) |
+| `--linkedin` | no | LinkedIn handle or URL (stored as handle, e.g. `janedoe`) |
+| `--x` | no | X / Twitter handle or URL (stored as handle, e.g. `janedoe`) |
+| `--bluesky` | no | Bluesky handle or URL (stored as handle, e.g. `janedoe.bsky.social`) |
+| `--telegram` | no | Telegram handle or URL (stored as handle, e.g. `janedoe`) |
 | `--set` | no | Custom field as `key=value` (repeatable — multiple allowed) |
 
 Prints the created contact ID to stdout.
 
-Social handles enforce uniqueness — no two contacts can share the same handle on a given platform.
+Social handles enforce uniqueness — no two contacts can share the same handle on a given platform. URLs are accepted on input and the handle is extracted automatically (e.g. `linkedin.com/in/janedoe` → `janedoe`, `x.com/janedoe` → `janedoe`, `t.me/janedoe` → `janedoe`).
 
 #### `crm contact list`
 
@@ -151,10 +152,11 @@ crm contact list --limit 10 --offset 20
 crm contact show ct_01J8Z...
 crm contact show jane@acme.com
 crm contact show "+1-212-555-1234"
-crm contact show linkedin.com/in/janedoe
+crm contact show janedoe                          # matches any social handle
+crm contact show linkedin.com/in/janedoe          # URL also works — extracts handle
 ```
 
-Accepts ID, any email, any phone number, or any social handle (LinkedIn, X, Bluesky, Telegram). Shows full contact details including linked companies, deals, activity history, tags, and custom fields.
+Accepts ID, any email, any phone number, or any social handle (LinkedIn, X, Bluesky, Telegram). URLs are also accepted — the handle is extracted before lookup. Shows full contact details including linked companies, deals, activity history, tags, and custom fields.
 
 #### `crm contact edit <id-or-email-or-phone-or-handle>`
 
@@ -176,10 +178,10 @@ crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 | `--rm-phone` | Remove a phone number |
 | `--add-company` | Link to a company (creates stub if needed) |
 | `--rm-company` | Unlink from a company |
-| `--linkedin` | Set LinkedIn URL or path |
-| `--x` | Set X / Twitter handle |
-| `--bluesky` | Set Bluesky handle |
-| `--telegram` | Set Telegram username |
+| `--linkedin` | Set LinkedIn handle (accepts URL — extracts handle) |
+| `--x` | Set X / Twitter handle (accepts URL — extracts handle) |
+| `--bluesky` | Set Bluesky handle (accepts URL — extracts handle) |
+| `--telegram` | Set Telegram handle (accepts URL — extracts handle) |
 | `--set` | Set custom field `key=value` |
 | `--unset` | Remove custom field |
 | `--add-tag` | Add tag |
@@ -905,7 +907,7 @@ The mount point stays live — changes made via the CLI or filesystem are reflec
 │   ├── _by-phone/                         # symlinks for phone lookup (E.164 filenames)
 │   │   └── +12125551234.json → ../ct_01J8Z...jane-doe.json
 │   ├── _by-linkedin/                      # symlinks for LinkedIn handle lookup
-│   │   └── linkedin.com-in-janedoe.json → ../ct_01J8Z...jane-doe.json
+│   │   └── janedoe.json → ../ct_01J8Z...jane-doe.json
 │   ├── _by-x/                             # symlinks for X handle lookup
 │   │   └── janedoe.json → ../ct_01J8Z...jane-doe.json
 │   ├── _by-bluesky/                       # symlinks for Bluesky handle lookup
@@ -982,7 +984,7 @@ Each entity file is a self-contained JSON document with linked data inlined:
   "companies": [
     { "id": "co_01J8Z...", "name": "Acme Corp" }
   ],
-  "linkedin": "linkedin.com/in/janedoe",
+  "linkedin": "janedoe",
   "x": "janedoe",
   "bluesky": null,
   "telegram": null,
