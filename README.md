@@ -6,6 +6,7 @@ A headless, CLI-first CRM. Your contacts, deals, and pipeline in a single SQLite
 crm contact add --name "Jane Doe" --email jane@acme.com
 crm deal list --stage qualified --format json | jq '.[] | .value'
 crm find "that fintech CTO from London"
+crm dupes
 crm report pipeline
 ```
 
@@ -186,7 +187,7 @@ Prompts for confirmation unless `--force` is passed. Removes the contact and unl
 crm contact merge ct_01J8Z... ct_02K9A...
 ```
 
-Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, tags, custom fields, and activity history are combined. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
+Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, tags, custom fields, and activity history are combined. Deals linked to the second contact are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
 
 ---
 
@@ -252,6 +253,14 @@ crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-415-555-0000"
 #### `crm company rm <id-or-domain-or-phone>`
 
 Same pattern as `crm contact rm`. Unlinks contacts and deals but does not delete them.
+
+#### `crm company merge <id> <id>`
+
+```bash
+crm company merge co_01J8Z... co_02K9A...
+```
+
+Merges two companies. Keeps the first, absorbs data from the second. Domains, phones, tags, and custom fields are combined. All contacts and deals linked to the second company are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
 
 ---
 
@@ -434,6 +443,30 @@ crm search "enterprise plan" --format json
 | Flag | Description |
 |------|-------------|
 | `--type` | Restrict to entity types: `contact`, `company`, `deal`, `activity` |
+
+#### `crm dupes`
+
+Find likely duplicate entities using fuzzy matching on string fields. This is a review command for agents and operators — it suggests suspicious pairs, but does not merge anything.
+
+```bash
+crm dupes
+crm dupes --type contact
+crm dupes --type company --format json
+crm dupes --limit 20
+```
+
+Typical signals:
+- similar contact names with different emails
+- similar company names with different domains
+- same contact name + same company name
+
+| Flag | Description |
+|------|-------------|
+| `--type` | Restrict to `contact` or `company` |
+| `--limit` | Max results (default: 50) |
+| `--threshold` | Minimum similarity score 0.0-1.0 |
+
+Output includes both candidate entities plus the reasons they were flagged. Exact duplicates already prevented by uniqueness constraints (for example email / phone) should not appear here.
 
 #### `crm find <query>`
 
@@ -1025,6 +1058,7 @@ src/
     activity.ts       Activity logging
     tag.ts            Tag management
     search.ts         Search + semantic find
+    dupes.ts          Likely duplicate detection
     report.ts         Reports
     import-export.ts  CSV/JSON import/export
     mount.ts          FUSE mount/unmount commands
