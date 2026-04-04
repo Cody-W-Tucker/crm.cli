@@ -193,7 +193,7 @@ Merges two contacts. Keeps the first, absorbs data from the second. Emails, phon
 
 ### Companies
 
-Organizations that contacts belong to.
+Organizations that contacts belong to. Companies store one or more websites (full URLs), not just bare domains.
 
 #### `crm company add`
 
@@ -205,7 +205,7 @@ crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone
 | Flag | Required | Description |
 |------|----------|-------------|
 | `--name` | yes | Company name |
-| `--domain` | no | Website domain (repeatable — multiple allowed) |
+| `--website` | no | Website URL (repeatable — multiple allowed) |
 | `--phone` | no | Phone number (repeatable — multiple allowed) |
 | `--tag` | no | Tag (repeatable — multiple allowed) |
 | `--set` | no | Custom field `key=value` (repeatable — multiple allowed) |
@@ -228,7 +228,7 @@ crm company show co_01J8Z...
 crm company show "+1-212-555-1234"
 ```
 
-Accepts ID, any domain, or any phone number. Shows company details plus all linked contacts and deals.
+Accepts ID, any website URL/host, or any phone number. Shows company details plus all linked contacts and deals.
 
 #### `crm company edit <id-or-domain-or-phone>`
 
@@ -241,8 +241,8 @@ crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-415-555-0000"
 | Flag | Description |
 |------|-------------|
 | `--name` | Update name |
-| `--add-domain` | Add a domain |
-| `--rm-domain` | Remove a domain |
+| `--add-website` | Add a website URL |
+| `--rm-website` | Remove a website URL |
 | `--add-phone` | Add a phone number |
 | `--rm-phone` | Remove a phone number |
 | `--set` | Set custom field `key=value` |
@@ -260,7 +260,7 @@ Same pattern as `crm contact rm`. Unlinks contacts and deals but does not delete
 crm company merge co_01J8Z... co_02K9A...
 ```
 
-Merges two companies. Keeps the first, absorbs data from the second. Domains, phones, tags, and custom fields are combined. All contacts and deals linked to the second company are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
+Merges two companies. Keeps the first, absorbs data from the second. Websites, phones, tags, and custom fields are combined. All contacts and deals linked to the second company are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
 
 ---
 
@@ -457,7 +457,7 @@ crm dupes --limit 20
 
 Typical signals:
 - similar contact names with different emails
-- similar company names with different domains
+- similar company names with different websites
 - same contact name + same company name
 
 | Flag | Description |
@@ -684,7 +684,7 @@ Only a small set of fields are hard-coded per entity — everything else lives i
 | Entity | Hard-coded fields | Everything else → `custom_fields` |
 |--------|-------------------|-----------------------------------|
 | Contact | `name`, `emails[]`, `phones[]`, `company`, `tags[]` | title, source, linkedin, notes, ... |
-| Company | `name`, `domains[]`, `phones[]`, `tags[]` | industry, size, website, founded, ... |
+| Company | `name`, `websites[]`, `phones[]`, `tags[]` | industry, size, founded, ... |
 | Deal | `title`, `value`, `stage`, `contacts[]`, `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
 | Activity | `type`, `entity_ref`, `note`, `deal`, `at` | duration, outcome, attendees, ... |
 
@@ -797,7 +797,7 @@ crm company show "ACME.COM"                # finds acme.com
 
 Uses [`normalize-url`](https://github.com/sindresorhus/normalize-url) for robust URL/domain normalization.
 
-**FUSE:** `_by-domain/` symlinks use the normalized form (`acme.com.json`, not `www.acme.com.json`).
+**FUSE:** `_by-website/` symlinks use the normalized form (`acme.com.json`, not `www.acme.com.json`).
 
 ---
 
@@ -852,7 +852,7 @@ All entities use prefixed ULID-based IDs:
 | Deal | `dl_` | `dl_01J8ZVXB3K...` |
 | Activity | `ac_` | `ac_01J8ZVXB3K...` |
 
-Commands that accept an entity reference also accept email or phone (contacts), or domain or phone (companies) as shortcuts.
+Commands that accept an entity reference also accept email or phone (contacts), or website URL/host or phone (companies) as shortcuts.
 
 ---
 
@@ -893,7 +893,7 @@ The mount point stays live — changes made via the CLI or filesystem are reflec
 │           └── ct_01J8Z...jane-doe.json → ../../ct_01J8Z...jane-doe.json
 ├── companies/
 │   ├── co_01J8Z...acme-corp.json
-│   ├── _by-domain/
+│   ├── _by-website/
 │   │   ├── acme.com.json → ../co_01J8Z...acme-corp.json
 │   │   └── acme.co.uk.json → ../co_01J8Z...acme-corp.json
 │   ├── _by-phone/                         # E.164 filenames
@@ -1102,7 +1102,7 @@ src/
   schemas.ts          Zod validation schemas
   commands/
     contact.ts        Contact CRUD
-    company.ts        Company CRUD
+    company.ts        Company CRUD (websites)
     deal.ts           Deal CRUD + pipeline
     activity.ts       Activity logging
     tag.ts            Tag management
