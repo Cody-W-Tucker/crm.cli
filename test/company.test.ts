@@ -15,7 +15,7 @@ describe('company add', () => {
       .runOK(
         'company', 'add',
         '--name', 'Acme Corp',
-        '--domain', 'acme.com',
+        '--website', 'acme.com',
         '--tag', 'enterprise',
         '--set', 'industry=SaaS',
         '--set', 'size=50-200',
@@ -34,20 +34,20 @@ describe('company add', () => {
 
   test('fails without --name', () => {
     const ctx = createTestContext()
-    const result = ctx.runFail('company', 'add', '--domain', 'acme.com')
+    const result = ctx.runFail('company', 'add', '--website', 'acme.com')
     expect(result.stderr).toContain('name')
   })
 
-  test('multiple domains on create', () => {
+  test('multiple websites on create', () => {
     const ctx = createTestContext()
     const id = ctx.runOK(
       'company', 'add', '--name', 'Acme Corp',
-      '--domain', 'acme.com', '--domain', 'acme.co.uk',
+      '--website', 'acme.com', '--website', 'acme.com/pricing',
     ).trim()
 
     const show = ctx.runOK('company', 'show', id)
     expect(show).toContain('acme.com')
-    expect(show).toContain('acme.co.uk')
+    expect(show).toContain('acme.com/pricing')
   })
 
   test('multiple phones on create', () => {
@@ -66,11 +66,11 @@ describe('company add', () => {
     const ctx = createTestContext()
     ctx.runOK(
       'company', 'add', '--name', 'Acme Corp',
-      '--domain', 'acme.com', '--domain', 'acme.co.uk',
+      '--website', 'acme.com', '--website', 'acme.com/pricing',
     )
 
     const show1 = ctx.runOK('company', 'show', 'acme.com')
-    const show2 = ctx.runOK('company', 'show', 'acme.co.uk')
+    const show2 = ctx.runOK('company', 'show', 'acme.com/pricing')
     expect(show1).toContain('Acme Corp')
     expect(show2).toContain('Acme Corp')
   })
@@ -79,7 +79,7 @@ describe('company add', () => {
 describe('company show', () => {
   test('by domain', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
     const out = ctx.runOK('company', 'show', 'acme.com')
     expect(out).toContain('Acme Corp')
   })
@@ -100,7 +100,7 @@ describe('company show', () => {
 
   test('shows linked contacts', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
     ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--company', 'Acme Corp')
     ctx.runOK('contact', 'add', '--name', 'John Doe', '--email', 'john@acme.com', '--company', 'Acme Corp')
 
@@ -142,29 +142,29 @@ describe('company edit', () => {
     expect(show).toContain('Tech')
   })
 
-  test('edit by domain', () => {
+  test('edit by website', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
     ctx.runOK('company', 'edit', 'acme.com', '--set', 'industry=Fintech')
 
     const show = ctx.runOK('company', 'show', 'acme.com')
     expect(show).toContain('Fintech')
   })
 
-  test('add domain to existing company', () => {
+  test('add website to existing company', () => {
     const ctx = createTestContext()
-    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com').trim()
-    ctx.runOK('company', 'edit', id, '--add-domain', 'acme.co.uk')
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com').trim()
+    ctx.runOK('company', 'edit', id, '--add-website', 'acme.com/pricing')
 
     const show = ctx.runOK('company', 'show', id)
     expect(show).toContain('acme.com')
-    expect(show).toContain('acme.co.uk')
+    expect(show).toContain('acme.com/pricing')
   })
 
-  test('remove domain from company', () => {
+  test('remove website from company', () => {
     const ctx = createTestContext()
-    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com', '--domain', 'old-acme.com').trim()
-    ctx.runOK('company', 'edit', id, '--rm-domain', 'old-acme.com')
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com', '--website', 'old-acme.com').trim()
+    ctx.runOK('company', 'edit', id, '--rm-website', 'old-acme.com')
 
     const show = ctx.runOK('company', 'show', id)
     expect(show).toContain('acme.com')
@@ -211,52 +211,52 @@ describe('company rm', () => {
   })
 })
 
-describe('company domain normalization', () => {
+describe('company website normalization', () => {
   test('strips protocol and www', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'https://www.acme.com/about')
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'https://www.acme.com/about')
 
-    const companies = ctx.runJSON<Array<{ domains: string[] }>>('company', 'list', '--format', 'json')
-    expect(companies[0].domains[0]).toBe('acme.com')
+    const companies = ctx.runJSON<Array<{ websites: string[] }>>('company', 'list', '--format', 'json')
+    expect(companies[0].websites[0]).toBe('acme.com/about')
   })
 
   test('lowercase normalization', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'ACME.COM')
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'ACME.COM')
 
-    const companies = ctx.runJSON<Array<{ domains: string[] }>>('company', 'list', '--format', 'json')
-    expect(companies[0].domains[0]).toBe('acme.com')
+    const companies = ctx.runJSON<Array<{ websites: string[] }>>('company', 'list', '--format', 'json')
+    expect(companies[0].websites[0]).toBe('acme.com')
   })
 
-  test('duplicate domain rejected', () => {
+  test('duplicate website rejected', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
 
-    const result = ctx.runFail('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.com')
+    const result = ctx.runFail('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com')
     expect(result.stderr).toContain('duplicate')
   })
 
   test('www variant treated as duplicate', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
 
-    const result = ctx.runFail('company', 'add', '--name', 'Acme Inc', '--domain', 'www.acme.com')
+    const result = ctx.runFail('company', 'add', '--name', 'Acme Inc', '--website', 'www.acme.com')
     expect(result.stderr).toContain('duplicate')
   })
 
-  test('subdomains are NOT duplicates', () => {
+  test('subwebsites are NOT duplicates', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme US', '--domain', 'us.acme.com')
-    ctx.runOK('company', 'add', '--name', 'Acme EU', '--domain', 'eu.acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme US', '--website', 'acme.com/a')
+    ctx.runOK('company', 'add', '--name', 'Acme EU', '--website', 'acme.com/b')
 
     const companies = ctx.runJSON<unknown[]>('company', 'list', '--format', 'json')
     expect(companies).toHaveLength(2)
   })
 
-  test('different TLDs are NOT duplicates', () => {
+  test('different paths on same host are NOT duplicates', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
-    ctx.runOK('company', 'add', '--name', 'Acme UK', '--domain', 'acme.co.uk')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme UK', '--website', 'acme.com/pricing')
 
     const companies = ctx.runJSON<unknown[]>('company', 'list', '--format', 'json')
     expect(companies).toHaveLength(2)
@@ -264,8 +264,8 @@ describe('company domain normalization', () => {
 
   test('root domain and subdomain are NOT duplicates', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Global', '--domain', 'acme.com')
-    ctx.runOK('company', 'add', '--name', 'Acme Blog', '--domain', 'blog.acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Global', '--website', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme Blog', '--website', 'blog.acme.com')
 
     const companies = ctx.runJSON<unknown[]>('company', 'list', '--format', 'json')
     expect(companies).toHaveLength(2)
@@ -273,7 +273,7 @@ describe('company domain normalization', () => {
 
   test('lookup works with any format', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com')
 
     const show1 = ctx.runOK('company', 'show', 'acme.com')
     const show2 = ctx.runOK('company', 'show', 'https://www.acme.com')
@@ -285,43 +285,43 @@ describe('company domain normalization', () => {
 
   test('add-domain rejects duplicate in different format', () => {
     const ctx = createTestContext()
-    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com').trim()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com').trim()
 
-    const result = ctx.runFail('company', 'edit', id, '--add-domain', 'https://www.acme.com')
+    const result = ctx.runFail('company', 'edit', id, '--add-website', 'https://www.acme.com')
     expect(result.stderr).toContain('duplicate')
   })
 
   test('rm-domain matches after normalization', () => {
     const ctx = createTestContext()
-    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'acme.com', '--domain', 'acme.co.uk').trim()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com', '--website', 'acme.com/pricing').trim()
 
-    ctx.runOK('company', 'edit', id, '--rm-domain', 'https://www.acme.com')
+    ctx.runOK('company', 'edit', id, '--rm-website', 'https://www.acme.com')
 
-    const companies = ctx.runJSON<Array<{ domains: string[] }>>('company', 'list', '--format', 'json')
-    expect(companies[0].domains).toHaveLength(1)
-    expect(companies[0].domains[0]).toBe('acme.co.uk')
+    const companies = ctx.runJSON<Array<{ websites: string[] }>>('company', 'list', '--format', 'json')
+    expect(companies[0].websites).toHaveLength(1)
+    expect(companies[0].websites[0]).toBe('acme.com/pricing')
   })
 
-  test('domains stored as normalized in JSON output', () => {
+  test('websites stored as normalized in JSON output', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme', '--domain', 'https://WWW.Acme.COM/about')
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'https://WWW.Acme.COM/about')
 
-    const companies = ctx.runJSON<Array<{ domains: string[] }>>('company', 'list', '--format', 'json')
-    expect(companies[0].domains[0]).toBe('acme.com')
+    const companies = ctx.runJSON<Array<{ websites: string[] }>>('company', 'list', '--format', 'json')
+    expect(companies[0].websites[0]).toBe('acme.com')
   })
 })
 
 describe('company merge', () => {
   test('merges two companies keeping first', () => {
     const ctx = createTestContext()
-    const id1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com', '--tag', 'enterprise').trim()
-    const id2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.co.uk', '--tag', 'uk').trim()
+    const id1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com', '--tag', 'enterprise').trim()
+    const id2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/pricing', '--tag', 'uk').trim()
 
     ctx.runOK('company', 'merge', id1, id2, '--keep-first')
 
     const show = ctx.runOK('company', 'show', id1)
     expect(show).toContain('acme.com')
-    expect(show).toContain('acme.co.uk')
+    expect(show).toContain('acme.com/pricing')
     expect(show).toContain('enterprise')
     expect(show).toContain('uk')
 
@@ -341,8 +341,8 @@ describe('company merge', () => {
 
   test('merge relinks contacts to surviving company', () => {
     const ctx = createTestContext()
-    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com').trim()
-    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.co.uk').trim()
+    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/pricing').trim()
     ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com', '--company', 'Acme Corp')
     ctx.runOK('contact', 'add', '--name', 'John', '--email', 'john@acme.co.uk', '--company', 'Acme Inc')
 
@@ -355,10 +355,10 @@ describe('company merge', () => {
 
   test('merge relinks deals to surviving company', () => {
     const ctx = createTestContext()
-    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com').trim()
-    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.co.uk').trim()
+    const co1 = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const co2 = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.com/pricing').trim()
     ctx.runOK('deal', 'add', '--title', 'Deal A', '--company', 'acme.com')
-    ctx.runOK('deal', 'add', '--title', 'Deal B', '--company', 'acme.co.uk')
+    ctx.runOK('deal', 'add', '--title', 'Deal B', '--company', 'acme.com/pricing')
 
     ctx.runOK('company', 'merge', co1, co2, '--keep-first')
 
@@ -446,8 +446,8 @@ describe('company auto-creation', () => {
 describe('company merge', () => {
   test('relinks contacts and deals from second company to first', () => {
     const ctx = createTestContext()
-    const first = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com').trim()
-    const second = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--domain', 'acme.ai').trim()
+    const first = ctx.runOK('company', 'add', '--name', 'Acme Corp', '--website', 'acme.com').trim()
+    const second = ctx.runOK('company', 'add', '--name', 'Acme Inc', '--website', 'acme.ai').trim()
     const contact = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.ai', '--company', 'Acme Inc').trim()
     const deal = ctx.runOK('deal', 'add', '--title', 'Expansion', '--company', second).trim()
 

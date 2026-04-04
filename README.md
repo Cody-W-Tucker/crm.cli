@@ -198,8 +198,8 @@ Organizations that contacts belong to.
 #### `crm company add`
 
 ```bash
-crm company add --name "Acme Corp" --website https://acme.com
-crm company add --name "Acme Corp" --website https://acme.com --website https://acme.co.uk --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
+crm company add --name "Acme Corp" --website acme.com
+crm company add --name "Acme Corp" --website acme.com/pricing --website acme.co.uk --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
 ```
 
 | Flag | Required | Description |
@@ -223,19 +223,19 @@ Same filtering/sorting flags as `crm contact list`.
 #### `crm company show <id-or-website-or-phone>`
 
 ```bash
-crm company show https://acme.com
+crm company show acme.com
 crm company show co_01J8Z...
 crm company show "+1-212-555-1234"
 ```
 
-Accepts ID, any website URL/host, or any phone number. Shows company details plus all linked contacts and deals.
+Accepts ID, any stored website value, or any phone number. Shows company details plus all linked contacts and deals.
 
 #### `crm company edit <id-or-website-or-phone>`
 
 ```bash
-crm company edit https://acme.com --name "Acme Inc" --set industry=Fintech
-crm company edit co_01J8Z... --add-website https://acme.co.uk --add-phone "+44-20-7946-0958"
-crm company edit https://acme.com --rm-website https://old-acme.com --rm-phone "+1-415-555-0000"
+crm company edit acme.com --name "Acme Inc" --set industry=Fintech
+crm company edit co_01J8Z... --add-website acme.co.uk --add-phone "+44-20-7946-0958"
+crm company edit acme.com --rm-website old-acme.com --rm-phone "+1-415-555-0000"
 ```
 
 | Flag | Description |
@@ -272,7 +272,7 @@ Pipeline tracking for opportunities.
 
 ```bash
 crm deal add --title "Acme Enterprise" --value 50000
-crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact jane@acme.com --company https://acme.com --expected-close 2026-06-01 --probability 60 --tag q2
+crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact jane@acme.com --company acme.com --expected-close 2026-06-01 --probability 60 --tag q2
 ```
 
 | Flag | Required | Description |
@@ -294,7 +294,7 @@ crm deal list
 crm deal list --stage qualified
 crm deal list --stage qualified --sort value --reverse
 crm deal list --contact jane@acme.com
-crm deal list --company https://acme.com
+crm deal list --company acme.com
 crm deal list --min-value 10000 --max-value 100000
 ```
 
@@ -607,7 +607,7 @@ JSON files expect an array of objects with the same field names.
 |------|-------------|
 | `--dry-run` | Preview what would be imported without writing |
 | `--skip-errors` | Continue on invalid rows instead of aborting |
-| `--update` | Update existing records (match by email/website host) instead of skipping duplicates |
+| `--update` | Update existing records (match by email/website) instead of skipping duplicates |
 
 #### `crm export <entity-type>`
 
@@ -752,52 +752,45 @@ display = "international"
 
 ---
 
-## Domain Normalization
+## Website Normalization
 
-Company websites are normalized on input for consistent storage, deduplication, and lookup:
+Websites are stored as full URLs. Input is normalized for consistent storage and lookup while preserving the path when present.
 
-- Strip protocol (`https://`, `http://`)
+Normalization rules:
+
+- Strip protocol if provided
 - Strip `www.` prefix
-- Lowercase
-- Strip trailing slash and path
+- Lowercase the host
+- Preserve the path
+- Strip trailing slash only when the path is otherwise empty
 
 ```bash
 crm company add --name "Acme" --website "https://www.Acme.com/about"
-# Stored as normalized host: acme.com
+# Stored as: acme.com/about
 ```
 
-**Dedup:** Exact match after normalization = duplicate. The same normalized website host cannot belong to two different companies:
+This means path-based companies can remain distinct:
 
 ```bash
-crm company add --name "Acme Corp" --website "acme.com"
-crm company add --name "Acme Inc" --website "www.acme.com"    # fails: duplicate website host
+crm company add --name "Example Docs" --website "example.com/a"
+crm company add --name "Example Pricing" --website "example.com/b"
 ```
 
-**Subdomains are distinct.** Subsidiaries or regional offices often use subdomains of a shared root host. These are treated as separate website hosts — not collapsed:
+**Dedup:** Exact match after normalization = duplicate. The same normalized website value cannot belong to two different companies:
 
 ```bash
-crm company add --name "Acme US" --website "us.acme.com"
-crm company add --name "Acme EU" --website "eu.acme.com"      # allowed — different subdomain
-crm company add --name "Acme Global" --website "acme.com"     # allowed — root host is distinct
+crm company add --name "Acme Corp" --website "acme.com/about"
+crm company add --name "Acme Inc" --website "www.acme.com/about"    # fails: duplicate website
 ```
 
-**Different TLDs are distinct:**
+**Lookup:** Equivalent input formats resolve to the same normalized website value:
 
 ```bash
-crm company add --name "Acme Corp" --website "acme.com"
-crm company add --name "Acme UK" --website "acme.co.uk"       # allowed — different TLD
+crm company show "https://www.acme.com/about"
+crm company show "ACME.COM/about"
 ```
 
-**Lookup:** Any input format resolves to the normalized website host:
-
-```bash
-crm company show "https://www.acme.com"    # finds acme.com
-crm company show "ACME.COM"                # finds acme.com
-```
-
-Uses [`normalize-url`](https://github.com/sindresorhus/normalize-url) for robust website normalization.
-
-**FUSE:** `_by-website/` symlinks use the normalized host (`acme.com.json`, not `www.acme.com.json`).
+**FUSE:** `_by-website/` symlinks use the normalized website value, encoded as a filename-safe path.
 
 ---
 
