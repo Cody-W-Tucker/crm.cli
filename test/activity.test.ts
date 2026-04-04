@@ -13,10 +13,10 @@ describe('log', () => {
     expect(activities[0].type).toBe('note')
   })
 
-  test('log call with duration', () => {
+  test('log call with duration as custom field', () => {
     const ctx = createTestContext()
     ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
-    ctx.runOK('log', 'call', 'jane@acme.com', 'Demo scheduled', '--duration', '15m')
+    ctx.runOK('log', 'call', 'jane@acme.com', 'Demo scheduled', '--set', 'duration=15m')
 
     const activities = ctx.runJSON<Array<{ type: string }>>('activity', 'list', '--contact', 'jane@acme.com', '--format', 'json')
     expect(activities).toHaveLength(1)

@@ -61,7 +61,7 @@ John Smith,john@globex.com,,Globex,Engineer,inbound,`
 
   test('update mode updates existing records', () => {
     const ctx = createTestContext()
-    ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'Engineer')
+    ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--set', 'title=Engineer')
 
     const csv = `name,email,title\nJane Doe,jane@acme.com,CTO\n`
     const csvPath = join(ctx.dir, 'contacts.csv')

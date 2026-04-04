@@ -16,9 +16,9 @@ describe('company add', () => {
         'company', 'add',
         '--name', 'Acme Corp',
         '--domain', 'acme.com',
-        '--industry', 'SaaS',
-        '--size', '50-200',
         '--tag', 'enterprise',
+        '--set', 'industry=SaaS',
+        '--set', 'size=50-200',
         '--set', 'founded=2020',
       )
       .trim()
@@ -84,6 +84,20 @@ describe('company show', () => {
     expect(out).toContain('Acme Corp')
   })
 
+  test('by phone', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--phone', '+1-555-0100')
+    const out = ctx.runOK('company', 'show', '+1-555-0100')
+    expect(out).toContain('Acme Corp')
+  })
+
+  test('company with phone but no domain is lookupable by phone', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Phone Only Corp', '--phone', '+44-20-7946-0958')
+    const out = ctx.runOK('company', 'show', '+44-20-7946-0958')
+    expect(out).toContain('Phone Only Corp')
+  })
+
   test('shows linked contacts', () => {
     const ctx = createTestContext()
     ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
@@ -99,9 +113,9 @@ describe('company show', () => {
 describe('company list', () => {
   test('returns all companies', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--industry', 'SaaS')
-    ctx.runOK('company', 'add', '--name', 'Globex', '--industry', 'Manufacturing')
-    ctx.runOK('company', 'add', '--name', 'Initech', '--industry', 'SaaS')
+    ctx.runOK('company', 'add', '--name', 'Acme Corp', '--set', 'industry=SaaS')
+    ctx.runOK('company', 'add', '--name', 'Globex', '--set', 'industry=Manufacturing')
+    ctx.runOK('company', 'add', '--name', 'Initech', '--set', 'industry=SaaS')
 
     const companies = ctx.runJSON<unknown[]>('company', 'list', '--format', 'json')
     expect(companies).toHaveLength(3)
@@ -121,7 +135,7 @@ describe('company edit', () => {
   test('update fields', () => {
     const ctx = createTestContext()
     const id = ctx.runOK('company', 'add', '--name', 'Acme Corp').trim()
-    ctx.runOK('company', 'edit', id, '--name', 'Acme Inc', '--industry', 'Tech')
+    ctx.runOK('company', 'edit', id, '--name', 'Acme Inc', '--set', 'industry=Tech')
 
     const show = ctx.runOK('company', 'show', id)
     expect(show).toContain('Acme Inc')
@@ -131,7 +145,7 @@ describe('company edit', () => {
   test('edit by domain', () => {
     const ctx = createTestContext()
     ctx.runOK('company', 'add', '--name', 'Acme Corp', '--domain', 'acme.com')
-    ctx.runOK('company', 'edit', 'acme.com', '--industry', 'Fintech')
+    ctx.runOK('company', 'edit', 'acme.com', '--set', 'industry=Fintech')
 
     const show = ctx.runOK('company', 'show', 'acme.com')
     expect(show).toContain('Fintech')

@@ -73,8 +73,8 @@ describe('search (keyword FTS5)', () => {
 describe('find (semantic search)', () => {
   test('natural language query returns relevant results', () => {
     const ctx = createTestContext()
-    ctx.runOK('contact', 'add', '--name', 'Alice Chen', '--title', 'CTO', '--company', 'FinTech London Ltd', '--set', 'location=London')
-    ctx.runOK('contact', 'add', '--name', 'Bob Wilson', '--title', 'Engineer', '--company', 'Acme US')
+    ctx.runOK('contact', 'add', '--name', 'Alice Chen', '--company', 'FinTech London Ltd', '--set', 'title=CTO', '--set', 'location=London')
+    ctx.runOK('contact', 'add', '--name', 'Bob Wilson', '--company', 'Acme US', '--set', 'title=Engineer')
 
     const results = ctx.runJSON<Array<{ name: string }>>('find', 'fintech CTO from London', '--format', 'json')
     expect(results.length).toBeGreaterThan(0)

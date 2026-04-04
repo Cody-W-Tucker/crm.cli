@@ -99,8 +99,8 @@ People you interact with.
 
 ```bash
 crm contact add --name "Jane Doe" --email jane@acme.com
-crm contact add --name "Jane Doe" --email jane@acme.com --email jane.doe@gmail.com --phone "+1-555-0100" --phone "+44-20-7946-0958" --company Acme --title CTO --source conference --tag hot-lead --tag enterprise
-crm contact add --name "Jane Doe" --email jane@acme.com --set linkedin=linkedin.com/in/janedoe --set notes="Met at SaaStr"
+crm contact add --name "Jane Doe" --email jane@acme.com --email jane.doe@gmail.com --phone "+1-555-0100" --phone "+44-20-7946-0958" --company Acme --tag hot-lead --tag enterprise
+crm contact add --name "Jane Doe" --email jane@acme.com --set title=CTO --set source=conference --set linkedin=linkedin.com/in/janedoe --set notes="Met at SaaStr"
 ```
 
 | Flag | Required | Description |
@@ -109,8 +109,6 @@ crm contact add --name "Jane Doe" --email jane@acme.com --set linkedin=linkedin.
 | `--email` | no | Email address (repeatable — multiple allowed) |
 | `--phone` | no | Phone number (repeatable — multiple allowed) |
 | `--company` | no | Company name (links to existing or creates stub) |
-| `--title` | no | Job title / role |
-| `--source` | no | Lead source (e.g. `conference`, `inbound`, `referral`) |
 | `--tag` | no | Tag (repeatable — multiple allowed) |
 | `--set` | no | Custom field as `key=value` (repeatable — multiple allowed) |
 
@@ -122,8 +120,7 @@ Prints the created contact ID to stdout.
 crm contact list
 crm contact list --tag hot-lead
 crm contact list --company Acme --format json
-crm contact list --source inbound --sort name
-crm contact list --filter "title=CTO AND source=conference"
+crm contact list --filter "title~=CTO AND source=conference"
 crm contact list --limit 10 --offset 20
 ```
 
@@ -131,29 +128,29 @@ crm contact list --limit 10 --offset 20
 |------|-------------|
 | `--tag` | Filter by tag (multiple = AND) |
 | `--company` | Filter by company name |
-| `--source` | Filter by source |
-| `--filter` | Filter expression (see Filtering) |
+| `--filter` | Filter expression (see Filtering) — works on both core and custom fields |
 | `--sort` | Sort field: `name`, `email`, `company`, `created`, `updated` |
 | `--reverse` | Reverse sort order |
 | `--limit` | Max results (default: no limit) |
 | `--offset` | Skip N results |
 
-#### `crm contact show <id-or-email>`
+#### `crm contact show <id-or-email-or-phone>`
 
 ```bash
 crm contact show ct_01J8Z...
 crm contact show jane@acme.com
+crm contact show "+1-555-0100"
 ```
 
-Shows full contact details including linked company, deals, activity history, tags, and custom fields.
+Accepts ID, any email, or any phone number. Shows full contact details including linked company, deals, activity history, tags, and custom fields.
 
-#### `crm contact edit <id-or-email>`
+#### `crm contact edit <id-or-email-or-phone>`
 
 ```bash
-crm contact edit jane@acme.com --name "Jane Smith" --title CEO
+crm contact edit jane@acme.com --name "Jane Smith"
 crm contact edit ct_01J8Z... --add-email jane.personal@gmail.com --rm-email old@acme.com
 crm contact edit ct_01J8Z... --add-phone "+44-20-7946-0958" --rm-phone "+1-555-OLD"
-crm contact edit ct_01J8Z... --set linkedin=linkedin.com/in/janesmith
+crm contact edit ct_01J8Z... --set title=CEO --set source=referral
 crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 ```
 
@@ -165,18 +162,16 @@ crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 | `--add-phone` | Add a phone number |
 | `--rm-phone` | Remove a phone number |
 | `--company` | Update company |
-| `--title` | Update title |
-| `--source` | Update source |
 | `--set` | Set custom field `key=value` |
 | `--unset` | Remove custom field |
 | `--add-tag` | Add tag |
 | `--rm-tag` | Remove tag |
 
-#### `crm contact rm <id-or-email>`
+#### `crm contact rm <id-or-email-or-phone>`
 
 ```bash
 crm contact rm jane@acme.com
-crm contact rm ct_01J8Z... --force    # skip confirmation
+crm contact rm "+1-555-0100" --force    # skip confirmation
 ```
 
 Prompts for confirmation unless `--force` is passed. Removes the contact and unlinks from deals/companies (does not delete linked entities).
@@ -199,7 +194,7 @@ Organizations that contacts belong to.
 
 ```bash
 crm company add --name "Acme Corp" --domain acme.com
-crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone "+1-555-0100" --phone "+44-20-7946-0958" --industry SaaS --size 50-200 --tag enterprise
+crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone "+1-555-0100" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
 ```
 
 | Flag | Required | Description |
@@ -207,8 +202,6 @@ crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone
 | `--name` | yes | Company name |
 | `--domain` | no | Website domain (repeatable — multiple allowed) |
 | `--phone` | no | Phone number (repeatable — multiple allowed) |
-| `--industry` | no | Industry category |
-| `--size` | no | Company size / headcount range |
 | `--tag` | no | Tag (repeatable — multiple allowed) |
 | `--set` | no | Custom field `key=value` (repeatable — multiple allowed) |
 
@@ -216,25 +209,26 @@ crm company add --name "Acme Corp" --domain acme.com --domain acme.co.uk --phone
 
 ```bash
 crm company list
-crm company list --industry SaaS --format json
+crm company list --filter "industry=SaaS" --format json
 crm company list --tag enterprise --sort name
 ```
 
 Same filtering/sorting flags as `crm contact list`.
 
-#### `crm company show <id-or-domain>`
+#### `crm company show <id-or-domain-or-phone>`
 
 ```bash
 crm company show acme.com
 crm company show co_01J8Z...
+crm company show "+1-555-0100"
 ```
 
-Shows company details plus all linked contacts and deals.
+Accepts ID, any domain, or any phone number. Shows company details plus all linked contacts and deals.
 
-#### `crm company edit <id-or-domain>`
+#### `crm company edit <id-or-domain-or-phone>`
 
 ```bash
-crm company edit acme.com --name "Acme Inc" --industry Fintech
+crm company edit acme.com --name "Acme Inc" --set industry=Fintech
 crm company edit co_01J8Z... --add-domain acme.co.uk --add-phone "+44-20-7946-0958"
 crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-555-9999"
 ```
@@ -246,14 +240,12 @@ crm company edit acme.com --rm-domain old-acme.com --rm-phone "+1-555-9999"
 | `--rm-domain` | Remove a domain |
 | `--add-phone` | Add a phone number |
 | `--rm-phone` | Remove a phone number |
-| `--industry` | Update industry |
-| `--size` | Update size |
 | `--set` | Set custom field `key=value` |
 | `--unset` | Remove custom field |
 | `--add-tag` | Add tag |
 | `--rm-tag` | Remove tag |
 
-#### `crm company rm <id-or-domain>`
+#### `crm company rm <id-or-domain-or-phone>`
 
 Same pattern as `crm contact rm`. Unlinks contacts and deals but does not delete them.
 
@@ -355,7 +347,7 @@ Interaction log attached to contacts, companies, or deals.
 
 ```bash
 crm log note jane@acme.com "Had a great intro call, interested in enterprise plan"
-crm log call jane@acme.com "Demo scheduled for Friday" --duration 15m
+crm log call jane@acme.com "Demo scheduled for Friday" --set duration=15m
 crm log meeting jane@acme.com "Went through pricing, positive signals"
 crm log email jane@acme.com "Sent proposal PDF"
 ```
@@ -363,14 +355,14 @@ crm log email jane@acme.com "Sent proposal PDF"
 | Argument | Description |
 |----------|-------------|
 | `type` | One of: `note`, `call`, `meeting`, `email` |
-| `entity-ref` | Contact ID/email, company ID/domain, or deal ID |
+| `entity-ref` | Contact ID/email/phone, company ID/domain/phone, or deal ID |
 | `note` | Free-text description |
 
 | Flag | Description |
 |------|-------------|
-| `--duration` | Duration (for calls/meetings): `15m`, `1h`, etc. |
 | `--deal` | Also link this activity to a deal |
 | `--at` | Override timestamp (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`) |
+| `--set` | Custom field `key=value` (e.g. `--set duration=15m`) |
 
 #### `crm activity list`
 
@@ -570,7 +562,7 @@ crm import companies companies.csv
 crm import deals deals.csv
 ```
 
-CSV files expect headers matching flag names (`name`, `email`, `phone`, `company`, `title`, `source`, `tags`). Tags are comma-separated within the field.
+CSV files expect headers matching core field names (`name`, `email`, `phone`, `company`, `tags`). Any unrecognized column headers are imported as custom fields. Tags are comma-separated within the field.
 
 JSON files expect an array of objects with the same field names.
 
@@ -630,6 +622,39 @@ Available hooks:
 
 ---
 
+## Custom Fields
+
+All entities (contacts, companies, deals, activities) support arbitrary custom fields via `--set key=value`. Custom fields store any JSON value — strings, numbers, booleans, arrays, objects.
+
+```bash
+# String value (default when using --set)
+crm contact add --name "Jane" --set title=CTO --set source=conference
+
+# JSON values (prefix with json: for non-string types)
+crm contact edit jane@acme.com --set "json:score=85" --set "json:verified=true"
+crm company edit acme.com --set "json:offices=[\"NYC\",\"London\"]"
+
+# Remove a custom field
+crm contact edit jane@acme.com --unset title
+
+# Filter on custom fields (same syntax as core fields)
+crm contact list --filter "title~=CTO"
+crm company list --filter "industry=SaaS"
+```
+
+Only a small set of fields are hard-coded per entity — everything else lives in `custom_fields`:
+
+| Entity | Hard-coded fields | Everything else → `custom_fields` |
+|--------|-------------------|-----------------------------------|
+| Contact | `name`, `emails[]`, `phones[]`, `company`, `tags[]` | title, source, linkedin, notes, ... |
+| Company | `name`, `domains[]`, `phones[]`, `tags[]` | industry, size, website, founded, ... |
+| Deal | `title`, `value`, `stage`, `contacts[]`, `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
+| Activity | `type`, `entity_ref`, `note`, `deal`, `at` | duration, outcome, attendees, ... |
+
+Hard-coded fields drive business logic (entity resolution, pipeline math, relationships, reports). Custom fields are metadata — flexible, filterable, but no special behavior.
+
+---
+
 ## Filtering
 
 The `--filter` flag accepts expressions:
@@ -643,11 +668,13 @@ expr AND expr                  # both conditions
 expr OR expr                   # either condition
 ```
 
-Examples:
+Custom fields are addressed by name — no prefix needed:
+
 ```bash
 crm contact list --filter "title~=CTO AND company=Acme"
 crm deal list --filter "value>10000 AND stage!=closed-lost"
 crm contact list --filter "source=inbound OR source=referral"
+crm company list --filter "industry=SaaS AND size~=50"
 ```
 
 ---
@@ -679,7 +706,7 @@ All entities use prefixed ULID-based IDs:
 | Deal | `dl_` | `dl_01J8ZVXB3K...` |
 | Activity | `ac_` | `ac_01J8ZVXB3K...` |
 
-Commands that accept an entity reference also accept email (contacts) or domain (companies) as shortcuts.
+Commands that accept an entity reference also accept email or phone (contacts), or domain or phone (companies) as shortcuts.
 
 ---
 
@@ -708,6 +735,8 @@ The mount point stays live — changes made via the CLI or filesystem are reflec
 │   ├── _by-email/                         # symlinks for email lookup
 │   │   ├── jane@acme.com.json → ../ct_01J8Z...jane-doe.json
 │   │   └── john@globex.com.json → ../ct_02K9A...john-smith.json
+│   ├── _by-phone/                         # symlinks for phone lookup
+│   │   └── +1-555-0100.json → ../ct_01J8Z...jane-doe.json
 │   ├── _by-company/                       # symlinks grouped by company
 │   │   └── acme-corp/
 │   │       └── ct_01J8Z...jane-doe.json → ../../ct_01J8Z...jane-doe.json
@@ -721,6 +750,8 @@ The mount point stays live — changes made via the CLI or filesystem are reflec
 │   ├── _by-domain/
 │   │   ├── acme.com.json → ../co_01J8Z...acme-corp.json
 │   │   └── acme.co.uk.json → ../co_01J8Z...acme-corp.json
+│   ├── _by-phone/
+│   │   └── +1-555-0100.json → ../co_01J8Z...acme-corp.json
 │   └── _by-tag/
 │       └── enterprise/
 │           └── co_01J8Z...acme-corp.json → ../../co_01J8Z...acme-corp.json
@@ -775,14 +806,14 @@ Each entity file is a self-contained JSON document with linked data inlined:
   "name": "Jane Doe",
   "emails": ["jane@acme.com", "jane.doe@gmail.com"],
   "phones": ["+1-555-0100"],
-  "title": "CTO",
   "company": {
     "id": "co_01J8Z...",
     "name": "Acme Corp"
   },
-  "source": "conference",
   "tags": ["hot-lead", "enterprise"],
   "custom_fields": {
+    "title": "CTO",
+    "source": "conference",
     "linkedin": "linkedin.com/in/janedoe"
   },
   "deals": [
@@ -803,8 +834,9 @@ Each entity file is a self-contained JSON document with linked data inlined:
 ls ~/crm/contacts/
 cat ~/crm/contacts/ct_01J8Z...jane-doe.json
 
-# Look up by email
+# Look up by email or phone
 cat ~/crm/contacts/_by-email/jane@acme.com.json
+cat ~/crm/contacts/_by-phone/+1-555-0100.json
 
 # List all deals in a pipeline stage
 ls ~/crm/deals/_by-stage/qualified/
@@ -850,7 +882,7 @@ Errors are returned as the write syscall error, so agents get immediate feedback
 echo '{"name": "Bob Smith", "emails": ["bob@globex.com"]}' > ~/crm/contacts/new.json
 
 # Update an existing contact — FULL document write (read, modify, write back)
-jq '.title = "VP Engineering"' ~/crm/contacts/ct_01J8Z...jane-doe.json | \
+jq '.custom_fields.title = "VP Engineering"' ~/crm/contacts/ct_01J8Z...jane-doe.json | \
   sponge ~/crm/contacts/ct_01J8Z...jane-doe.json
 
 # Delete a contact
@@ -890,7 +922,7 @@ Agent: Let me search for that fintech CTO.
 > cat ~/crm/search/"fintech CTO london".json
 
 Agent: I'll update her title.
-> jq '.title = "CEO"' ~/crm/contacts/ct_01J8Z...jane-doe.json > /tmp/update.json
+> jq '.custom_fields.title = "CEO"' ~/crm/contacts/ct_01J8Z...jane-doe.json > /tmp/update.json
 > mv /tmp/update.json ~/crm/contacts/ct_01J8Z...jane-doe.json
 ```
 

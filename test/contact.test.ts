@@ -18,10 +18,10 @@ describe('contact add', () => {
         '--email', 'jane@acme.com',
         '--phone', '+1-555-0100',
         '--company', 'Acme Corp',
-        '--title', 'CTO',
-        '--source', 'conference',
         '--tag', 'hot-lead',
         '--tag', 'enterprise',
+        '--set', 'title=CTO',
+        '--set', 'source=conference',
         '--set', 'linkedin=linkedin.com/in/janedoe',
       )
       .trim()
@@ -102,6 +102,20 @@ describe('contact show', () => {
     ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com')
     const out = ctx.runOK('contact', 'show', 'jane@acme.com')
     expect(out).toContain('Jane Doe')
+  })
+
+  test('by phone', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--phone', '+1-555-0100')
+    const out = ctx.runOK('contact', 'show', '+1-555-0100')
+    expect(out).toContain('Jane Doe')
+  })
+
+  test('contact with phone but no email is lookupable by phone', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Phone Only', '--phone', '+44-20-7946-0958')
+    const out = ctx.runOK('contact', 'show', '+44-20-7946-0958')
+    expect(out).toContain('Phone Only')
   })
 
   test('not found returns error', () => {
@@ -195,11 +209,11 @@ describe('contact list', () => {
     expect(lines[1]).toContain('alice@example.com')
   })
 
-  test('filter expression', () => {
+  test('filter expression on custom fields', () => {
     const ctx = createTestContext()
-    ctx.runOK('contact', 'add', '--name', 'Alice', '--title', 'CTO', '--source', 'conference')
-    ctx.runOK('contact', 'add', '--name', 'Bob', '--title', 'Engineer', '--source', 'inbound')
-    ctx.runOK('contact', 'add', '--name', 'Charlie', '--title', 'CTO', '--source', 'inbound')
+    ctx.runOK('contact', 'add', '--name', 'Alice', '--set', 'title=CTO', '--set', 'source=conference')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--set', 'title=Engineer', '--set', 'source=inbound')
+    ctx.runOK('contact', 'add', '--name', 'Charlie', '--set', 'title=CTO', '--set', 'source=inbound')
 
     const contacts = ctx.runJSON<unknown[]>(
       'contact', 'list', '--filter', 'title=CTO AND source=inbound', '--format', 'json',
@@ -211,8 +225,8 @@ describe('contact list', () => {
 describe('contact edit', () => {
   test('update fields by ID', () => {
     const ctx = createTestContext()
-    const id = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'Engineer').trim()
-    ctx.runOK('contact', 'edit', id, '--name', 'Jane Smith', '--title', 'CTO')
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--set', 'title=Engineer').trim()
+    ctx.runOK('contact', 'edit', id, '--name', 'Jane Smith', '--set', 'title=CTO')
 
     const show = ctx.runOK('contact', 'show', id)
     expect(show).toContain('Jane Smith')
@@ -223,7 +237,7 @@ describe('contact edit', () => {
   test('update by email', () => {
     const ctx = createTestContext()
     ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com')
-    ctx.runOK('contact', 'edit', 'jane@acme.com', '--title', 'CEO')
+    ctx.runOK('contact', 'edit', 'jane@acme.com', '--set', 'title=CEO')
 
     const show = ctx.runOK('contact', 'show', 'jane@acme.com')
     expect(show).toContain('CEO')

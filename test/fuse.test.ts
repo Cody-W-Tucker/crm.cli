@@ -73,12 +73,13 @@ describe('fuse: directory layout', () => {
     }
   })
 
-  test('contacts/ has _by-email, _by-company, _by-tag subdirs', () => {
+  test('contacts/ has _by-email, _by-phone, _by-company, _by-tag subdirs', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
       const entries = readdirSync(join(ctx.mountPoint, 'contacts'))
       expect(entries).toContain('_by-email')
+      expect(entries).toContain('_by-phone')
       expect(entries).toContain('_by-company')
       expect(entries).toContain('_by-tag')
     } finally {
@@ -86,12 +87,13 @@ describe('fuse: directory layout', () => {
     }
   })
 
-  test('companies/ has _by-domain, _by-tag subdirs', () => {
+  test('companies/ has _by-domain, _by-phone, _by-tag subdirs', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
       const entries = readdirSync(join(ctx.mountPoint, 'companies'))
       expect(entries).toContain('_by-domain')
+      expect(entries).toContain('_by-phone')
       expect(entries).toContain('_by-tag')
     } finally {
       unmount(ctx)
@@ -168,7 +170,7 @@ describe('fuse: read contacts', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
-      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'CTO')
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--set', 'title=CTO')
 
       const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
       expect(files).toHaveLength(1)
@@ -177,7 +179,20 @@ describe('fuse: read contacts', () => {
       const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', files[0]), 'utf-8'))
       expect(data.name).toBe('Jane Doe')
       expect(data.emails).toContain('jane@acme.com')
-      expect(data.title).toBe('CTO')
+      expect(data.custom_fields.title).toBe('CTO')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('_by-phone symlink resolves to correct contact', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) return
+    try {
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--phone', '+1-555-0100')
+
+      const data = JSON.parse(readFileSync(join(ctx.mountPoint, 'contacts', '_by-phone', '+1-555-0100.json'), 'utf-8'))
+      expect(data.name).toBe('Jane Doe')
     } finally {
       unmount(ctx)
     }
@@ -449,12 +464,12 @@ describe('fuse: write operations', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
-      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'Engineer')
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--set', 'title=Engineer')
 
       const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
       const filePath = join(ctx.mountPoint, 'contacts', files[0])
       const data = JSON.parse(readFileSync(filePath, 'utf-8'))
-      data.title = 'CTO'
+      data.custom_fields.title = 'CTO'
       writeFileSync(filePath, JSON.stringify(data))
 
       const show = ctx.runOK('contact', 'show', 'jane@acme.com')
@@ -640,17 +655,17 @@ describe('fuse: write validation', () => {
     const ctx = createFuseTestContext()
     if (skipIfNoFuse(ctx)) return
     try {
-      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--title', 'CTO')
+      ctx.runOK('contact', 'add', '--name', 'Jane Doe', '--email', 'jane@acme.com', '--set', 'title=CTO')
 
       const files = readdirSync(join(ctx.mountPoint, 'contacts')).filter((f) => f.endsWith('.json') && !f.startsWith('_'))
       const filePath = join(ctx.mountPoint, 'contacts', files[0])
 
-      // Write back WITHOUT title — full doc replace means title should be cleared.
+      // Write back WITHOUT custom_fields — full doc replace means they should be cleared.
       writeFileSync(filePath, JSON.stringify({ name: 'Jane Doe', emails: ['jane@acme.com'] }))
 
       const data = JSON.parse(readFileSync(filePath, 'utf-8'))
       expect(data.name).toBe('Jane Doe')
-      expect(data.title).toBeUndefined()
+      expect(data.custom_fields).toBeUndefined()
     } finally {
       unmount(ctx)
     }
