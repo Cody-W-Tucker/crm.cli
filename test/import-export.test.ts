@@ -8,7 +8,7 @@ describe('import contacts', () => {
   test('import CSV', () => {
     const ctx = createTestContext()
     const csv = `name,email,phone,company,title,source,tags
-Jane Doe,jane@acme.com,+1-555-0100,Acme,CTO,conference,"hot-lead,enterprise"
+Jane Doe,jane@acme.com,+1-212-555-1234,Acme,CTO,conference,"hot-lead,enterprise"
 John Smith,john@globex.com,,Globex,Engineer,inbound,`
     const csvPath = join(ctx.dir, 'contacts.csv')
     writeFileSync(csvPath, csv)

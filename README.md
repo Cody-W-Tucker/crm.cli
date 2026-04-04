@@ -23,7 +23,7 @@ bunx crm.cli contact list
 Or build from source:
 
 ```bash
-git clone https://github.com/duetso/crm.cli.git
+git clone https://github.com/dzhng/crm.cli.git
 cd crm.cli
 bun install
 bun link

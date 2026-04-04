@@ -47,8 +47,8 @@ describe('dupes', () => {
 
   test('finds likely duplicate companies by similar website hosts even with paths', () => {
     const ctx = createTestContext()
-    ctx.runOK('company', 'add', '--name', 'Example Docs', '--website', 'example.com/a')
-    ctx.runOK('company', 'add', '--name', 'Example Docs Inc', '--website', 'example.com/b')
+    ctx.runOK('company', 'add', '--name', 'Example Docs', '--website', 'example.com/research')
+    ctx.runOK('company', 'add', '--name', 'Example Docs Inc', '--website', 'example.com/consulting')
 
     const out = ctx.runOK('dupes', '--type', 'company')
     expect(out).toContain('Example Docs')

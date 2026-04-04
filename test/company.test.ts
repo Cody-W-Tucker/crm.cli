@@ -307,7 +307,7 @@ describe('company website normalization', () => {
     ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'https://WWW.Acme.COM/labs')
 
     const companies = ctx.runJSON<Array<{ websites: string[] }>>('company', 'list', '--format', 'json')
-    expect(companies[0].websites[0]).toBe('acme.com')
+    expect(companies[0].websites[0]).toBe('acme.com/labs')
   })
 })
 

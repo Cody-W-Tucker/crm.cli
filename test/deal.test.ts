@@ -198,7 +198,10 @@ describe('pipeline', () => {
     expect(pipeline[0]).toHaveProperty('value')
   })
 
-  test('deal show includes linked company', () => {
+})
+
+describe('deal show', () => {
+  test('includes linked company', () => {
     const ctx = createTestContext()
     ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com')
     const id = ctx.runOK('deal', 'add', '--title', 'Acme Deal', '--company', 'acme.com').trim()
