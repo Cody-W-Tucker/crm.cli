@@ -61,14 +61,15 @@ export function registerSearchCommands(program: Command) {
           }
         }
       }
+      const capped = results.slice(0, config.mount.search_limit)
       if (fmt === 'json') {
-        console.log(JSON.stringify(results, null, 2))
+        console.log(JSON.stringify(capped, null, 2))
       } else {
-        if (results.length === 0) {
+        if (capped.length === 0) {
           console.log('')
           return
         }
-        const lines = results.map((r) => {
+        const lines = capped.map((r) => {
           if (r.type === 'contact') {
             return `[contact] ${r.name} (${r.id})`
           }
@@ -127,9 +128,10 @@ export function registerSearchCommands(program: Command) {
         const t = Number(opts.threshold)
         limited = limited.filter((e) => e.score >= t)
       }
-      if (opts.limit) {
-        limited = limited.slice(0, Number(opts.limit))
-      }
+      const maxResults = opts.limit
+        ? Number(opts.limit)
+        : config.mount.search_limit
+      limited = limited.slice(0, maxResults)
       const resultPromises = limited.map((r) =>
         lookupEntity(db, r.entity_type, r.entity_id, config),
       )

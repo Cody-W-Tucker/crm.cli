@@ -16,8 +16,9 @@ export interface CRMConfig {
   }
   phone: { default_country?: string; display: string }
   pipeline: { stages: string[] }
-  search: { model: string }
 }
+
+export const SEARCH_MODEL = 'mxbai-embed-xsmall-v1'
 
 const DEFAULT_STAGES = [
   'lead',
@@ -34,7 +35,6 @@ function defaultConfig(): CRMConfig {
     pipeline: { stages: [...DEFAULT_STAGES] },
     defaults: { format: 'table' },
     phone: { display: 'international' },
-    search: { model: 'all-MiniLM-L6-v2' },
     hooks: {},
     mount: {
       default_path: join(homedir(), 'crm'),
@@ -94,9 +94,6 @@ function mergeConfig(
   }
   if (override.mount) {
     result.mount = { ...result.mount, ...override.mount }
-  }
-  if (override.search) {
-    result.search = { ...result.search, ...override.search }
   }
   return result
 }

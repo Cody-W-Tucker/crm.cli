@@ -1,5 +1,12 @@
 import { spawnSync } from 'node:child_process'
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -559,26 +566,47 @@ export function registerFuseCommands(program: Command) {
                 ? pkgConfig.stdout.toString().trim().split(/\s+/)
                 : ['-lfuse3', '-lpthread']
             })(),
-            '-lsqlite3',
           ],
           { stdio: ['pipe', 'pipe', 'pipe'] },
         )
         if (compile.status !== 0) {
           die(
-            `Error: Failed to compile FUSE helper. Ensure libfuse3-dev and libsqlite3-dev are installed.\n${compile.stderr?.toString() || ''}`,
+            `Error: Failed to compile FUSE helper. Ensure libfuse3-dev is installed.\n${compile.stderr?.toString() || ''}`,
           )
         }
       }
 
-      // Write config sidecar JSON for the FUSE helper
-      const configSidecar = join(homedir(), '.crm', `mount-${slugify(mp)}.json`)
-      writeFileSync(
-        configSidecar,
-        JSON.stringify({ stages: config.pipeline.stages }),
+      // Start the TS FUSE daemon
+      const socketPath = join(homedir(), '.crm', `fuse-${slugify(mp)}.sock`)
+      const daemonPath = join(import.meta.dir, '..', 'fuse-daemon.ts')
+
+      const daemonProc = Bun.spawn(
+        [
+          'bun',
+          'run',
+          daemonPath,
+          socketPath,
+          config.database.path,
+          ...config.pipeline.stages,
+        ],
+        { stdio: ['pipe', 'pipe', 'pipe'] },
       )
 
-      // Spawn the helper
-      const args = ['-f', mp, '--', config.database.path, configSidecar]
+      // Wait for daemon socket
+      const deadline = Date.now() + 5000
+      while (Date.now() < deadline) {
+        if (existsSync(socketPath)) {
+          break
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50))
+      }
+      if (!existsSync(socketPath)) {
+        daemonProc.kill()
+        die('Error: FUSE daemon failed to start.')
+      }
+
+      // Spawn the FUSE helper
+      const args = ['-f', mp, '--', socketPath]
       if (opts.readonly || config.mount.readonly) {
         args.unshift('-o', 'ro')
       }
@@ -591,12 +619,13 @@ export function registerFuseCommands(program: Command) {
       await new Promise((resolve) => setTimeout(resolve, 500))
 
       if (proc.exitCode !== null) {
+        daemonProc.kill()
         die('Error: FUSE mount failed. Is FUSE available?')
       }
 
-      // Write PID file for unmount
+      // Write PID files for unmount
       const pidFile = join(homedir(), '.crm', `mount-${slugify(mp)}.pid`)
-      writeFileSync(pidFile, String(proc.pid))
+      writeFileSync(pidFile, `${proc.pid}\n${daemonProc.pid}`)
 
       console.log(`Mounted at ${mp} (PID ${proc.pid})`)
     })
@@ -617,6 +646,24 @@ export function registerFuseCommands(program: Command) {
         if (umount.status !== 0) {
           die(`Error: Failed to unmount ${mountpoint}`)
         }
+      }
+
+      // Kill daemon process if PID file exists
+      const pidFile = join(
+        homedir(),
+        '.crm',
+        `mount-${slugify(mountpoint)}.pid`,
+      )
+      if (existsSync(pidFile)) {
+        const pids = readFileSync(pidFile, 'utf-8').trim().split('\n')
+        for (const pid of pids) {
+          try {
+            process.kill(Number(pid))
+          } catch {
+            // already dead
+          }
+        }
+        unlinkSync(pidFile)
       }
     })
 

@@ -1,179 +1,296 @@
 /**
- * CRM FUSE3 helper binary.
+ * CRM FUSE3 thin shim.
  *
- * Mounts the CRM SQLite database as a virtual filesystem.
- * Compiled with: gcc -o crm-fuse src/fuse-helper.c $(pkg-config --cflags --libs fuse3) -lsqlite3
+ * Handles FUSE3 syscalls and forwards all data operations to the TS daemon
+ * over a Unix domain socket. All business logic lives in fuse-daemon.ts.
  *
- * Usage: crm-fuse -f <mountpoint> -- <db-path> [<config-json-path>]
- *
- * This is a standalone C program spawned by `crm mount`. It implements the
- * FUSE3 operations to serve the CRM data as files and directories.
- *
- * Pipeline stages are read from a JSON sidecar file written by `crm mount`.
- * Format: {"stages":["lead","qualified",...]}
+ * Compiled with: gcc -o crm-fuse src/fuse-helper.c $(pkg-config --cflags --libs fuse3)
+ * Usage: crm-fuse -f <mountpoint> -- <socket-path>
  */
 #define FUSE_USE_VERSION 35
 #include <fuse3/fuse.h>
-#include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <time.h>
-#include <ctype.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <pthread.h>
 
-static sqlite3 *g_db = NULL;
+static char g_socket_path[4096];
 
-/* Pipeline stages from config */
-#define MAX_STAGES 32
-static char *g_stages[MAX_STAGES];
-static int g_num_stages = 0;
+/* ── Socket communication ── */
 
-/* Load pipeline stages from config JSON sidecar.
- * Expected format: {"stages":["lead","qualified",...]} */
-static void load_config(const char *config_path) {
-    if (!config_path) return;
-    FILE *f = fopen(config_path, "r");
-    if (!f) return;
-    char buf[8192];
-    size_t len = fread(buf, 1, sizeof(buf) - 1, f);
-    fclose(f);
-    buf[len] = '\0';
-
-    char *arr_start = strstr(buf, "[");
-    if (!arr_start) return;
-    char *p = arr_start + 1;
-    while (*p && g_num_stages < MAX_STAGES) {
-        while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t' || *p == ',')) p++;
-        if (*p == ']') break;
-        if (*p == '"') {
-            p++;
-            char *start = p;
-            while (*p && *p != '"') p++;
-            if (*p == '"') {
-                size_t slen = p - start;
-                g_stages[g_num_stages] = malloc(slen + 1);
-                memcpy(g_stages[g_num_stages], start, slen);
-                g_stages[g_num_stages][slen] = '\0';
-                g_num_stages++;
-                p++;
-            }
-        } else {
-            p++;
-        }
+static int sock_connect(void) {
+    int fd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (fd < 0) return -1;
+    struct sockaddr_un addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, g_socket_path, sizeof(addr.sun_path) - 1);
+    if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        close(fd);
+        return -1;
     }
+    return fd;
 }
 
-/* Slugify a name for filenames */
-static void slugify(const char *input, char *output, size_t maxlen) {
+/*
+ * Send a request line and read the response line.
+ * Returns a malloc'd string (caller must free) or NULL on error.
+ */
+static char *sock_request(const char *request) {
+    int fd = sock_connect();
+    if (fd < 0) return NULL;
+
+    /* Send request + newline */
+    size_t reqlen = strlen(request);
+    char *reqbuf = malloc(reqlen + 2);
+    if (!reqbuf) { close(fd); return NULL; }
+    memcpy(reqbuf, request, reqlen);
+    reqbuf[reqlen] = '\n';
+    reqbuf[reqlen + 1] = '\0';
+
+    ssize_t sent = 0;
+    while ((size_t)sent < reqlen + 1) {
+        ssize_t n = write(fd, reqbuf + sent, reqlen + 1 - sent);
+        if (n <= 0) { free(reqbuf); close(fd); return NULL; }
+        sent += n;
+    }
+    free(reqbuf);
+
+    /* Read response until newline */
+    size_t cap = 65536;
+    char *resp = malloc(cap);
+    if (!resp) { close(fd); return NULL; }
+    size_t len = 0;
+    while (1) {
+        if (len >= cap - 1) {
+            cap *= 2;
+            char *tmp = realloc(resp, cap);
+            if (!tmp) { free(resp); close(fd); return NULL; }
+            resp = tmp;
+        }
+        ssize_t n = read(fd, resp + len, cap - len - 1);
+        if (n <= 0) break;
+        len += n;
+        resp[len] = '\0';
+        if (memchr(resp + len - n, '\n', n)) break;
+    }
+    close(fd);
+
+    /* Trim trailing newline */
+    while (len > 0 && (resp[len-1] == '\n' || resp[len-1] == '\r')) {
+        resp[--len] = '\0';
+    }
+    return resp;
+}
+
+/* ── Minimal JSON helpers ── */
+
+static const char *json_find_key(const char *json, const char *key) {
+    char pattern[256];
+    snprintf(pattern, sizeof(pattern), "\"%s\":", key);
+    const char *p = strstr(json, pattern);
+    if (!p) return NULL;
+    p += strlen(pattern);
+    while (*p == ' ' || *p == '\t') p++;
+    return p;
+}
+
+static char *json_get_string(const char *json, const char *key) {
+    const char *v = json_find_key(json, key);
+    if (!v || *v != '"') return NULL;
+    v++;
+    const char *end = v;
+    while (*end && *end != '"') {
+        if (*end == '\\') end++;
+        if (*end) end++;
+    }
+    size_t len = end - v;
+    char *s = malloc(len + 1);
+    if (!s) return NULL;
     size_t j = 0;
-    for (size_t i = 0; input[i] && j < maxlen - 1; i++) {
-        char c = input[i];
-        if (c >= 'A' && c <= 'Z') c = c - 'A' + 'a';
-        if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
-            output[j++] = c;
-        } else if (j > 0 && output[j-1] != '-') {
-            output[j++] = '-';
+    for (size_t i = 0; i < len; i++) {
+        if (v[i] == '\\' && i + 1 < len) {
+            i++;
+            if (v[i] == 'n') s[j++] = '\n';
+            else if (v[i] == 't') s[j++] = '\t';
+            else if (v[i] == 'r') s[j++] = '\r';
+            else s[j++] = v[i];
+        } else {
+            s[j++] = v[i];
         }
     }
-    while (j > 0 && output[j-1] == '-') j--;
-    output[j] = '\0';
+    s[j] = '\0';
+    return s;
 }
 
-/* Top-level directories */
-static const char *top_dirs[] = {
-    "contacts", "companies", "deals", "activities",
-    "reports", "search", NULL
-};
+static int json_has_error(const char *json) {
+    return json_find_key(json, "error") != NULL;
+}
 
-/* Top-level virtual files */
-static const char *top_files[] = {
-    "pipeline.json", "tags.json", NULL
-};
+static int json_get_errno(const char *json) {
+    char *err = json_get_string(json, "error");
+    if (!err) return EIO;
+    int code = EIO;
+    if (strcmp(err, "ENOENT") == 0) code = ENOENT;
+    else if (strcmp(err, "EINVAL") == 0) code = EINVAL;
+    else if (strcmp(err, "EPERM") == 0) code = EPERM;
+    else if (strcmp(err, "EROFS") == 0) code = EROFS;
+    else if (strcmp(err, "ENOSYS") == 0) code = ENOSYS;
+    free(err);
+    return code;
+}
 
-/* Check if a string is in a null-terminated array */
-static int in_array(const char *needle, const char **haystack) {
-    for (int i = 0; haystack[i]; i++) {
-        if (strcmp(needle, haystack[i]) == 0) return 1;
+static int json_is_type(const char *json, const char *type) {
+    char *t = json_get_string(json, "type");
+    if (!t) return 0;
+    int match = strcmp(t, type) == 0;
+    free(t);
+    return match;
+}
+
+static int json_escape(char *buf, size_t maxlen, const char *s) {
+    int p = 0;
+    p += snprintf(buf + p, maxlen - p, "\"");
+    for (size_t i = 0; s[i] && (size_t)p < maxlen - 2; i++) {
+        char c = s[i];
+        if (c == '"' || c == '\\') {
+            buf[p++] = '\\'; buf[p++] = c;
+        } else if (c == '\n') {
+            buf[p++] = '\\'; buf[p++] = 'n';
+        } else if (c == '\r') {
+            buf[p++] = '\\'; buf[p++] = 'r';
+        } else if (c == '\t') {
+            buf[p++] = '\\'; buf[p++] = 't';
+        } else {
+            buf[p++] = c;
+        }
     }
-    return 0;
+    p += snprintf(buf + p, maxlen - p, "\"");
+    return p;
 }
+
+static char **json_get_entries(const char *json, int *count) {
+    *count = 0;
+    const char *v = json_find_key(json, "entries");
+    if (!v || *v != '[') return NULL;
+    v++;
+
+    int cap = 64;
+    char **entries = malloc(sizeof(char *) * cap);
+    if (!entries) return NULL;
+
+    while (*v) {
+        while (*v == ' ' || *v == ',' || *v == '\t' || *v == '\n') v++;
+        if (*v == ']') break;
+        if (*v != '"') { v++; continue; }
+        v++;
+        const char *end = v;
+        while (*end && *end != '"') {
+            if (*end == '\\') end++;
+            if (*end) end++;
+        }
+        size_t len = end - v;
+        if (*count >= cap - 1) {
+            cap *= 2;
+            entries = realloc(entries, sizeof(char *) * cap);
+        }
+        entries[*count] = malloc(len + 1);
+        memcpy(entries[*count], v, len);
+        entries[*count][len] = '\0';
+        (*count)++;
+        v = end;
+        if (*v == '"') v++;
+    }
+    entries[*count] = NULL;
+    return entries;
+}
+
+static char *json_get_data(const char *json) {
+    return json_get_string(json, "data");
+}
+
+/* ── Write buffer management ── */
+#define MAX_WRITE_BUFS 64
+
+struct write_buf {
+    char path[4096];
+    char *data;
+    size_t len;
+    size_t cap;
+    int active;
+    int committed; /* 1 if data has been sent to daemon and accepted */
+};
+
+static struct write_buf g_write_bufs[MAX_WRITE_BUFS];
+static pthread_mutex_t g_write_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+static struct write_buf *find_write_buf(const char *path) {
+    for (int i = 0; i < MAX_WRITE_BUFS; i++) {
+        if (g_write_bufs[i].active && strcmp(g_write_bufs[i].path, path) == 0)
+            return &g_write_bufs[i];
+    }
+    return NULL;
+}
+
+static struct write_buf *alloc_write_buf(const char *path) {
+    for (int i = 0; i < MAX_WRITE_BUFS; i++) {
+        if (!g_write_bufs[i].active) {
+            g_write_bufs[i].active = 1;
+            strncpy(g_write_bufs[i].path, path, sizeof(g_write_bufs[i].path) - 1);
+            g_write_bufs[i].path[sizeof(g_write_bufs[i].path) - 1] = '\0';
+            g_write_bufs[i].cap = 65536;
+            g_write_bufs[i].data = malloc(g_write_bufs[i].cap);
+            g_write_bufs[i].len = 0;
+            g_write_bufs[i].committed = 0;
+            if (g_write_bufs[i].data) g_write_bufs[i].data[0] = '\0';
+            return &g_write_bufs[i];
+        }
+    }
+    return NULL;
+}
+
+static void free_write_buf(struct write_buf *wb) {
+    if (wb->data) free(wb->data);
+    wb->data = NULL;
+    wb->len = 0;
+    wb->cap = 0;
+    wb->active = 0;
+}
+
+/* ── FUSE operations ── */
 
 static int crm_getattr(const char *path, struct stat *stbuf,
                         struct fuse_file_info *fi) {
     (void)fi;
     memset(stbuf, 0, sizeof(struct stat));
 
-    if (strcmp(path, "/") == 0) {
-        stbuf->st_mode = S_IFDIR | 0755;
-        stbuf->st_nlink = 2;
-        return 0;
+    char req[8192];
+    snprintf(req, sizeof(req), "{\"op\":\"getattr\",\"path\":\"%s\"}", path);
+
+    char *resp = sock_request(req);
+    if (!resp) return -EIO;
+
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        return -err;
     }
 
-    /* Strip leading / */
-    const char *p = path + 1;
-
-    /* Top-level directories */
-    if (in_array(p, top_dirs)) {
+    if (json_is_type(resp, "dir")) {
         stbuf->st_mode = S_IFDIR | 0755;
         stbuf->st_nlink = 2;
-        return 0;
-    }
-
-    /* Top-level virtual files */
-    if (in_array(p, top_files)) {
-        stbuf->st_mode = S_IFREG | 0444;
+    } else {
+        stbuf->st_mode = S_IFREG | 0644;
         stbuf->st_nlink = 1;
-        stbuf->st_size = 4096; /* approximate */
-        return 0;
+        stbuf->st_size = 65536;
     }
 
-    /* Check for entity subdirectories and files */
-    /* contacts/_by-email, contacts/_by-phone, etc. */
-    if (strncmp(p, "contacts/", 9) == 0 ||
-        strncmp(p, "companies/", 10) == 0 ||
-        strncmp(p, "deals/", 6) == 0 ||
-        strncmp(p, "activities/", 11) == 0 ||
-        strncmp(p, "reports/", 8) == 0) {
-        /* Subdirectories starting with _by- */
-        const char *slash = strchr(p, '/');
-        if (slash) {
-            const char *sub = slash + 1;
-            if (strncmp(sub, "_by-", 4) == 0) {
-                /* Check if it's a dir or a file within it */
-                const char *next = strchr(sub, '/');
-                if (!next) {
-                    stbuf->st_mode = S_IFDIR | 0755;
-                    stbuf->st_nlink = 2;
-                    return 0;
-                }
-                /* File or subdir within _by-* */
-                const char *after = next + 1;
-                if (strchr(after, '/')) {
-                    /* Nested dir */
-                    stbuf->st_mode = S_IFDIR | 0755;
-                    stbuf->st_nlink = 2;
-                } else if (strstr(after, ".json")) {
-                    stbuf->st_mode = S_IFREG | 0644;
-                    stbuf->st_nlink = 1;
-                    stbuf->st_size = 4096;
-                } else {
-                    stbuf->st_mode = S_IFDIR | 0755;
-                    stbuf->st_nlink = 2;
-                }
-                return 0;
-            }
-            /* Entity JSON files */
-            if (strstr(sub, ".json") && !strchr(sub, '/')) {
-                stbuf->st_mode = S_IFREG | 0644;
-                stbuf->st_nlink = 1;
-                stbuf->st_size = 4096;
-                return 0;
-            }
-        }
-    }
-
-    return -ENOENT;
+    free(resp);
+    return 0;
 }
 
 static int crm_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
@@ -184,111 +301,31 @@ static int crm_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     filler(buf, ".", NULL, 0, 0);
     filler(buf, "..", NULL, 0, 0);
 
-    if (strcmp(path, "/") == 0) {
-        for (int i = 0; top_dirs[i]; i++)
-            filler(buf, top_dirs[i], NULL, 0, 0);
-        for (int i = 0; top_files[i]; i++)
-            filler(buf, top_files[i], NULL, 0, 0);
-        return 0;
+    char req[8192];
+    snprintf(req, sizeof(req), "{\"op\":\"readdir\",\"path\":\"%s\"}", path);
+
+    char *resp = sock_request(req);
+    if (!resp) return -EIO;
+
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        return -err;
     }
 
-    const char *p = path + 1;
+    int count = 0;
+    char **entries = json_get_entries(resp, &count);
+    free(resp);
 
-    if (strcmp(p, "contacts") == 0) {
-        const char *subdirs[] = {
-            "_by-email", "_by-phone", "_by-linkedin", "_by-x",
-            "_by-bluesky", "_by-telegram", "_by-company", "_by-tag", NULL
-        };
-        for (int i = 0; subdirs[i]; i++)
-            filler(buf, subdirs[i], NULL, 0, 0);
-        /* List contact files */
-        sqlite3_stmt *stmt;
-        if (sqlite3_prepare_v2(g_db,
-            "SELECT id, name FROM contacts", -1, &stmt, NULL) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char *id = (const char *)sqlite3_column_text(stmt, 0);
-                const char *name = (const char *)sqlite3_column_text(stmt, 1);
-                char slug[256], fname[512];
-                slugify(name ? name : "unknown", slug, sizeof(slug));
-                snprintf(fname, sizeof(fname), "%s...%s.json", id, slug);
-                filler(buf, fname, NULL, 0, 0);
-            }
-            sqlite3_finalize(stmt);
+    if (entries) {
+        for (int i = 0; i < count; i++) {
+            filler(buf, entries[i], NULL, 0, 0);
+            free(entries[i]);
         }
-        return 0;
+        free(entries);
     }
 
-    if (strcmp(p, "companies") == 0) {
-        const char *subdirs[] = {"_by-website", "_by-phone", "_by-tag", NULL};
-        for (int i = 0; subdirs[i]; i++)
-            filler(buf, subdirs[i], NULL, 0, 0);
-        sqlite3_stmt *stmt;
-        if (sqlite3_prepare_v2(g_db,
-            "SELECT id, name FROM companies", -1, &stmt, NULL) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char *id = (const char *)sqlite3_column_text(stmt, 0);
-                const char *name = (const char *)sqlite3_column_text(stmt, 1);
-                char slug[256], fname[512];
-                slugify(name ? name : "unknown", slug, sizeof(slug));
-                snprintf(fname, sizeof(fname), "%s...%s.json", id, slug);
-                filler(buf, fname, NULL, 0, 0);
-            }
-            sqlite3_finalize(stmt);
-        }
-        return 0;
-    }
-
-    if (strcmp(p, "deals") == 0) {
-        const char *subdirs[] = {"_by-stage", "_by-company", "_by-tag", NULL};
-        for (int i = 0; subdirs[i]; i++)
-            filler(buf, subdirs[i], NULL, 0, 0);
-        sqlite3_stmt *stmt;
-        if (sqlite3_prepare_v2(g_db,
-            "SELECT id, title FROM deals", -1, &stmt, NULL) == SQLITE_OK) {
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                const char *id = (const char *)sqlite3_column_text(stmt, 0);
-                const char *title = (const char *)sqlite3_column_text(stmt, 1);
-                char slug[256], fname[512];
-                slugify(title ? title : "unknown", slug, sizeof(slug));
-                snprintf(fname, sizeof(fname), "%s...%s.json", id, slug);
-                filler(buf, fname, NULL, 0, 0);
-            }
-            sqlite3_finalize(stmt);
-        }
-        return 0;
-    }
-
-    if (strcmp(p, "activities") == 0) {
-        const char *subdirs[] = {
-            "_by-contact", "_by-company", "_by-deal", "_by-type", NULL
-        };
-        for (int i = 0; subdirs[i]; i++)
-            filler(buf, subdirs[i], NULL, 0, 0);
-        return 0;
-    }
-
-    if (strcmp(p, "reports") == 0) {
-        const char *files[] = {
-            "pipeline.json", "stale.json", "forecast.json",
-            "conversion.json", "velocity.json", "won.json", "lost.json", NULL
-        };
-        for (int i = 0; files[i]; i++)
-            filler(buf, files[i], NULL, 0, 0);
-        return 0;
-    }
-
-    if (strcmp(p, "search") == 0) {
-        return 0;
-    }
-
-    /* deals/_by-stage — list stage dirs from config */
-    if (strcmp(p, "deals/_by-stage") == 0) {
-        for (int i = 0; i < g_num_stages; i++)
-            filler(buf, g_stages[i], NULL, 0, 0);
-        return 0;
-    }
-
-    return -ENOENT;
+    return 0;
 }
 
 static int crm_open(const char *path, struct fuse_file_info *fi) {
@@ -300,48 +337,199 @@ static int crm_read(const char *path, char *buf, size_t size, off_t offset,
                      struct fuse_file_info *fi) {
     (void)fi;
 
-    /* Generate JSON content for the requested path */
-    char content[65536] = "{}";
-    size_t content_len = 2;
+    char req[8192];
+    snprintf(req, sizeof(req), "{\"op\":\"read\",\"path\":\"%s\"}", path);
 
-    const char *p = path + 1;
+    char *resp = sock_request(req);
+    if (!resp) return -EIO;
 
-    if (strcmp(p, "pipeline.json") == 0 ||
-        strcmp(p, "reports/pipeline.json") == 0) {
-        /* Pipeline report — uses stages from config */
-        int pos = 0;
-        pos += snprintf(content + pos, sizeof(content) - pos, "[");
-        for (int i = 0; i < g_num_stages; i++) {
-            sqlite3_stmt *stmt;
-            char sql[256];
-            snprintf(sql, sizeof(sql),
-                "SELECT COUNT(*), COALESCE(SUM(value),0) FROM deals WHERE stage='%s'",
-                g_stages[i]);
-            int count = 0;
-            double value = 0;
-            if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL) == SQLITE_OK) {
-                if (sqlite3_step(stmt) == SQLITE_ROW) {
-                    count = sqlite3_column_int(stmt, 0);
-                    value = sqlite3_column_double(stmt, 1);
-                }
-                sqlite3_finalize(stmt);
-            }
-            if (i > 0) pos += snprintf(content + pos, sizeof(content) - pos, ",");
-            pos += snprintf(content + pos, sizeof(content) - pos,
-                "{\"stage\":\"%s\",\"count\":%d,\"value\":%.0f}",
-                g_stages[i], count, value);
-        }
-        pos += snprintf(content + pos, sizeof(content) - pos, "]");
-        content_len = pos;
-    } else if (strcmp(p, "tags.json") == 0) {
-        snprintf(content, sizeof(content), "[]");
-        content_len = 2;
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        return -err;
     }
 
-    if ((size_t)offset >= content_len) return 0;
+    char *data = json_get_data(resp);
+    free(resp);
+    if (!data) return -EIO;
+
+    size_t content_len = strlen(data);
+    if ((size_t)offset >= content_len) {
+        free(data);
+        return 0;
+    }
     if (offset + size > content_len) size = content_len - offset;
-    memcpy(buf, content + offset, size);
+    memcpy(buf, data + offset, size);
+    free(data);
     return size;
+}
+
+static int crm_create(const char *path, mode_t mode, struct fuse_file_info *fi) {
+    (void)mode; (void)fi;
+
+    pthread_mutex_lock(&g_write_mutex);
+    struct write_buf *wb = find_write_buf(path);
+    if (!wb) wb = alloc_write_buf(path);
+    pthread_mutex_unlock(&g_write_mutex);
+
+    return wb ? 0 : -ENOMEM;
+}
+
+static int crm_truncate(const char *path, off_t size, struct fuse_file_info *fi) {
+    (void)fi;
+
+    pthread_mutex_lock(&g_write_mutex);
+    struct write_buf *wb = find_write_buf(path);
+    if (!wb) wb = alloc_write_buf(path);
+    if (wb) {
+        wb->len = (size_t)size;
+        if (wb->data && wb->len < wb->cap) wb->data[wb->len] = '\0';
+    }
+    pthread_mutex_unlock(&g_write_mutex);
+
+    return wb ? 0 : -ENOMEM;
+}
+
+static int crm_write(const char *path, const char *data, size_t size,
+                      off_t offset, struct fuse_file_info *fi) {
+    (void)fi;
+
+    pthread_mutex_lock(&g_write_mutex);
+    struct write_buf *wb = find_write_buf(path);
+    if (!wb) wb = alloc_write_buf(path);
+    if (!wb) {
+        pthread_mutex_unlock(&g_write_mutex);
+        return -ENOMEM;
+    }
+
+    size_t end = (size_t)offset + size;
+    if (end >= wb->cap) {
+        size_t newcap = wb->cap;
+        while (newcap <= end) newcap *= 2;
+        char *tmp = realloc(wb->data, newcap);
+        if (!tmp) {
+            pthread_mutex_unlock(&g_write_mutex);
+            return -ENOMEM;
+        }
+        wb->data = tmp;
+        wb->cap = newcap;
+    }
+
+    memcpy(wb->data + offset, data, size);
+    if (end > wb->len) wb->len = end;
+    wb->data[wb->len] = '\0';
+    wb->committed = 0;
+
+    /* Send data to daemon immediately for validation + persistence.
+     * Bun's writeFileSync doesn't check close() errors, so we must
+     * validate here in the write() syscall where errors propagate. */
+    size_t data_escaped_max = wb->len * 2 + 3;
+    size_t reqsize = strlen(path) + data_escaped_max + 128;
+    char *req = malloc(reqsize);
+    if (!req) {
+        pthread_mutex_unlock(&g_write_mutex);
+        return -ENOMEM;
+    }
+
+    int rp = 0;
+    rp += snprintf(req + rp, reqsize - rp, "{\"op\":\"write\",\"path\":\"%s\",\"data\":", path);
+    rp += json_escape(req + rp, reqsize - rp, wb->data);
+    rp += snprintf(req + rp, reqsize - rp, "}");
+
+    pthread_mutex_unlock(&g_write_mutex);
+
+    char *resp = sock_request(req);
+    free(req);
+
+    if (!resp) return -EIO;
+
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        /* Clear the buffer so flush doesn't re-send bad data */
+        pthread_mutex_lock(&g_write_mutex);
+        wb = find_write_buf(path);
+        if (wb) { wb->len = 0; wb->committed = 0; }
+        pthread_mutex_unlock(&g_write_mutex);
+        return -err;
+    }
+
+    free(resp);
+    pthread_mutex_lock(&g_write_mutex);
+    wb = find_write_buf(path);
+    if (wb) wb->committed = 1;
+    pthread_mutex_unlock(&g_write_mutex);
+
+    return (int)size;
+}
+
+static int crm_flush(const char *path, struct fuse_file_info *fi) {
+    (void)fi;
+
+    pthread_mutex_lock(&g_write_mutex);
+    struct write_buf *wb = find_write_buf(path);
+    if (!wb || wb->len == 0 || wb->committed) {
+        pthread_mutex_unlock(&g_write_mutex);
+        return 0;
+    }
+
+    /* Send uncommitted data to daemon (fallback for multi-chunk writes) */
+    size_t data_escaped_max = wb->len * 2 + 3;
+    size_t reqsize = strlen(path) + data_escaped_max + 128;
+    char *req = malloc(reqsize);
+    if (!req) {
+        pthread_mutex_unlock(&g_write_mutex);
+        return -ENOMEM;
+    }
+
+    int rp = 0;
+    rp += snprintf(req + rp, reqsize - rp, "{\"op\":\"write\",\"path\":\"%s\",\"data\":", path);
+    rp += json_escape(req + rp, reqsize - rp, wb->data);
+    rp += snprintf(req + rp, reqsize - rp, "}");
+
+    pthread_mutex_unlock(&g_write_mutex);
+
+    char *resp = sock_request(req);
+    free(req);
+
+    if (!resp) return -EIO;
+
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        return -err;
+    }
+
+    free(resp);
+    return 0;
+}
+
+static int crm_release(const char *path, struct fuse_file_info *fi) {
+    (void)fi;
+
+    pthread_mutex_lock(&g_write_mutex);
+    struct write_buf *wb = find_write_buf(path);
+    if (wb) free_write_buf(wb);
+    pthread_mutex_unlock(&g_write_mutex);
+
+    return 0;
+}
+
+static int crm_unlink(const char *path) {
+    char req[8192];
+    snprintf(req, sizeof(req), "{\"op\":\"unlink\",\"path\":\"%s\"}", path);
+
+    char *resp = sock_request(req);
+    if (!resp) return -EIO;
+
+    if (json_has_error(resp)) {
+        int err = json_get_errno(resp);
+        free(resp);
+        return -err;
+    }
+
+    free(resp);
+    return 0;
 }
 
 static const struct fuse_operations crm_ops = {
@@ -349,51 +537,35 @@ static const struct fuse_operations crm_ops = {
     .readdir  = crm_readdir,
     .open     = crm_open,
     .read     = crm_read,
+    .create   = crm_create,
+    .truncate = crm_truncate,
+    .write    = crm_write,
+    .flush    = crm_flush,
+    .release  = crm_release,
+    .unlink   = crm_unlink,
 };
 
 int main(int argc, char *argv[]) {
-    /* Find the DB path and config path after "--" separator */
-    const char *db_path = NULL;
-    const char *config_path = NULL;
+    /* Find socket path after "--" separator
+     * Usage: crm-fuse -f <mountpoint> [fuse-opts] -- <socket-path> */
     int fuse_argc = argc;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--") == 0) {
-            if (i + 1 < argc) db_path = argv[i + 1];
-            if (i + 2 < argc) config_path = argv[i + 2];
+            if (i + 1 < argc) {
+                strncpy(g_socket_path, argv[i + 1], sizeof(g_socket_path) - 1);
+            }
             fuse_argc = i;
             break;
         }
     }
 
-    if (!db_path) {
-        fprintf(stderr, "Usage: crm-fuse -f <mountpoint> -- <db-path> [<config-json-path>]\n");
+    if (!g_socket_path[0]) {
+        fprintf(stderr, "Usage: crm-fuse -f <mountpoint> [opts] -- <socket-path>\n");
         return 1;
     }
 
-    /* Load pipeline stages from config sidecar */
-    load_config(config_path);
+    memset(g_write_bufs, 0, sizeof(g_write_bufs));
 
-    /* Fall back to default stages if none loaded */
-    if (g_num_stages == 0) {
-        const char *defaults[] = {
-            "lead", "qualified", "proposal",
-            "negotiation", "closed-won", "closed-lost"
-        };
-        for (int i = 0; i < 6; i++)
-            g_stages[i] = strdup(defaults[i]);
-        g_num_stages = 6;
-    }
-
-    /* Open SQLite database */
-    if (sqlite3_open(db_path, &g_db) != SQLITE_OK) {
-        fprintf(stderr, "Failed to open database: %s\n", sqlite3_errmsg(g_db));
-        return 1;
-    }
-
-    int ret = fuse_main(fuse_argc, argv, &crm_ops, NULL);
-
-    sqlite3_close(g_db);
-    for (int i = 0; i < g_num_stages; i++) free(g_stages[i]);
-    return ret;
+    return fuse_main(fuse_argc, argv, &crm_ops, NULL);
 }
