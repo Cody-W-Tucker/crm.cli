@@ -184,7 +184,7 @@ crm contact list --limit 10 --offset 20
 | `--tag` | Filter by tag (multiple = AND) |
 | `--company` | Filter by company name (matches any linked company) |
 | `--filter` | Filter expression (see Filtering) — works on both core and custom fields |
-| `--sort` | Sort field: `name`, `email`, `company`, `created`, `updated` |
+| `--sort` | Sort field: `name`, `created`, `updated` |
 | `--reverse` | Reverse sort order |
 | `--limit` | Max results (default: no limit) |
 | `--offset` | Skip N results |
@@ -280,7 +280,7 @@ crm company list --tag enterprise --sort name
 |------|-------------|
 | `--tag` | Filter by tag |
 | `--filter` | Filter expression (see Filtering) |
-| `--sort` | Sort field: `name`, `website`, `created`, `updated` |
+| `--sort` | Sort field: `name`, `created`, `updated` |
 | `--reverse` | Reverse sort order |
 | `--limit` | Max results |
 | `--offset` | Skip N results |
@@ -638,7 +638,7 @@ crm report activity --by contact          # grouped by contact
 Contacts and deals with no recent activity.
 
 ```bash
-crm report stale                    # no activity in 14 days (default)
+crm report stale                    # no activity in 30 days (default)
 crm report stale --days 7           # no activity in 7 days
 crm report stale --type deal        # only stale deals
 crm report stale --type contact     # only stale contacts

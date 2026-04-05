@@ -115,35 +115,46 @@ export function registerReportCommands(program: Command) {
       }
     })
 
-  cmd.command('conversion').action(async () => {
-    const { db, config, fmt } = await getCtx()
-    const data = await computeConversion(db, config.pipeline.stages)
-    if (fmt === 'json') {
-      console.log(JSON.stringify(data, null, 2))
-    } else {
-      console.log(formatOutput(data, fmt, config))
-    }
-  })
-
-  cmd.command('velocity').action(async () => {
-    const { db, config, fmt } = await getCtx()
-    const data = await computeVelocity(db, config.pipeline.stages)
-    if (fmt === 'json') {
-      console.log(JSON.stringify(data, null, 2))
-    } else {
-      console.log(
-        formatOutput(
-          data.map((d) => ({
-            stage: d.stage,
-            avg_time: d.avg_display,
-            deals: d.deals,
-          })),
-          fmt,
-          config,
-        ),
+  cmd
+    .command('conversion')
+    .option('--since <date>', 'Only count transitions after date (YYYY-MM-DD)')
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      const data = await computeConversion(
+        db,
+        config.pipeline.stages,
+        opts.since,
       )
-    }
-  })
+      if (fmt === 'json') {
+        console.log(JSON.stringify(data, null, 2))
+      } else {
+        console.log(formatOutput(data, fmt, config))
+      }
+    })
+
+  cmd
+    .command('velocity')
+    .option('--won-only', 'Only count deals that were won')
+    .action(async (opts) => {
+      const { db, config, fmt } = await getCtx()
+      const wonStage = opts.wonOnly ? config.pipeline.won_stage : undefined
+      const data = await computeVelocity(db, config.pipeline.stages, wonStage)
+      if (fmt === 'json') {
+        console.log(JSON.stringify(data, null, 2))
+      } else {
+        console.log(
+          formatOutput(
+            data.map((d) => ({
+              stage: d.stage,
+              avg_time: d.avg_display,
+              deals: d.deals,
+            })),
+            fmt,
+            config,
+          ),
+        )
+      }
+    })
 
   cmd
     .command('forecast')

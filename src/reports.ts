@@ -75,11 +75,18 @@ export async function computeStale(
   return results
 }
 
-export async function computeConversion(db: DB, stages: string[]) {
-  const activities = await db
+export async function computeConversion(
+  db: DB,
+  stages: string[],
+  since?: string,
+) {
+  let activities = await db
     .select()
     .from(schema.activities)
     .where(eq(schema.activities.type, 'stage-change'))
+  if (since) {
+    activities = activities.filter((a) => a.created_at >= since)
+  }
   const stageEntries: Record<string, Set<string>> = {}
   const stageExits: Record<string, Set<string>> = {}
   for (const s of stages) {
@@ -143,7 +150,11 @@ export function formatDuration(ms: number): string {
   return `${secs}s`
 }
 
-export async function computeVelocity(db: DB, stages: string[]) {
+export async function computeVelocity(
+  db: DB,
+  stages: string[],
+  wonStage?: string,
+) {
   const activities = await db
     .select()
     .from(schema.activities)
@@ -165,6 +176,9 @@ export async function computeVelocity(db: DB, stages: string[]) {
       .where(eq(schema.deals.id, did))
     const deal = dealResults[0]
     if (!deal) {
+      continue
+    }
+    if (wonStage && deal.stage !== wonStage) {
       continue
     }
     let prevTime = new Date(deal.created_at).getTime()

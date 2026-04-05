@@ -235,6 +235,9 @@ export function registerDealCommands(program: Command) {
     .argument('<ref>')
     .option('--title <title>')
     .option('--value <n>')
+    .option('--company <ref>', 'Change linked company')
+    .option('--expected-close <date>', 'Expected close date (YYYY-MM-DD)')
+    .option('--probability <n>', 'Win probability 0-100')
     .option('--add-contact <ref>', '', collect, [])
     .option('--rm-contact <ref>', '', collect, [])
     .option('--add-tag <t>', '', collect, [])
@@ -249,6 +252,15 @@ export function registerDealCommands(program: Command) {
       }
       const title = opts.title ?? d.title
       const value = opts.value === undefined ? d.value : Number(opts.value)
+      const expectedClose = opts.expectedClose ?? d.expected_close
+      const probability =
+        opts.probability === undefined
+          ? d.probability
+          : Number(opts.probability)
+      let companyId = d.company
+      if (opts.company) {
+        companyId = await getOrCreateCompanyId(db, opts.company, config)
+      }
       let contacts: string[] = safeJSON(d.contacts)
       let tags: string[] = safeJSON(d.tags)
       const custom: Record<string, unknown> = safeJSON(d.custom_fields)
@@ -296,6 +308,9 @@ export function registerDealCommands(program: Command) {
         .set({
           title,
           value,
+          company: companyId,
+          expected_close: expectedClose,
+          probability,
           contacts: JSON.stringify(contacts),
           tags: JSON.stringify(tags),
           custom_fields: JSON.stringify(custom),

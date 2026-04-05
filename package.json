@@ -15,7 +15,7 @@
   "scripts": {
     "crm": "bun run src/cli.ts",
     "check-types": "tsc --noEmit",
-    "test": "bun test",
+    "test": "bun test --timeout 30000",
     "lint": "ultracite fix",
     "prepare": "husky"
   },
