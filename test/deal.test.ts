@@ -344,7 +344,7 @@ describe('deal move', () => {
     expect(show).toContain('Signed annual contract')
   })
 
-  test('closed-lost with reason', () => {
+  test('closed-lost with note', () => {
     const ctx = createTestContext()
     const id = ctx.runOK('deal', 'add', '--title', 'Lost Deal').trim()
     ctx.runOK(
@@ -353,7 +353,7 @@ describe('deal move', () => {
       id,
       '--stage',
       'closed-lost',
-      '--reason',
+      '--note',
       'Budget cut',
     )
 
@@ -715,8 +715,8 @@ describe('deal show', () => {
   })
 })
 
-describe('deal move --reason body', () => {
-  test('reason appears in stage-change activity body', () => {
+describe('deal move notes', () => {
+  test('note appears in stage-change activity body', () => {
     const ctx = createTestContext()
     const id = ctx
       .runOK('deal', 'add', '--title', 'D', '--stage', 'lead')
@@ -727,7 +727,7 @@ describe('deal move --reason body', () => {
       id,
       '--stage',
       'closed-lost',
-      '--reason',
+      '--note',
       'Too slow',
     )
 
@@ -762,36 +762,6 @@ describe('deal move --reason body', () => {
     )
     const sc = activities.find((a) => a.type === 'stage-change')
     expect(sc!.body).toMatch(/from lead to qualified/)
-  })
-
-  test('note and reason both appear in body', () => {
-    const ctx = createTestContext()
-    const id = ctx
-      .runOK('deal', 'add', '--title', 'D', '--stage', 'lead')
-      .trim()
-    ctx.runOK(
-      'deal',
-      'move',
-      id,
-      '--stage',
-      'closed-won',
-      '--note',
-      'Signed contract',
-      '--reason',
-      'Good fit',
-    )
-
-    const activities = ctx.runJSON<Array<{ type: string; body: string }>>(
-      'activity',
-      'list',
-      '--deal',
-      id,
-      '--format',
-      'json',
-    )
-    const sc = activities.find((a) => a.type === 'stage-change')
-    expect(sc!.body).toContain('Signed contract')
-    expect(sc!.body).toContain('Good fit')
   })
 
   test('backward stage move is allowed', () => {
@@ -920,8 +890,8 @@ describe('deal rm --force', () => {
   })
 })
 
-describe('deal move --reason on non-lost stage', () => {
-  test('reason is stored for any stage move, not just closed-lost', () => {
+describe('deal move --note on any stage', () => {
+  test('note is stored for any stage move', () => {
     const ctx = createTestContext()
     const id = ctx
       .runOK('deal', 'add', '--title', 'D', '--stage', 'lead')
@@ -932,7 +902,7 @@ describe('deal move --reason on non-lost stage', () => {
       id,
       '--stage',
       'qualified',
-      '--reason',
+      '--note',
       'Strong fit',
     )
 

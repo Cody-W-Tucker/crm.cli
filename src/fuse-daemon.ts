@@ -29,6 +29,7 @@ import {
   buildDealJSON,
   slugify,
 } from './fuse-json'
+import { getOrCreateCompanyId } from './lib/helpers'
 import { normalizePhone } from './normalize'
 import {
   computeConversion,
@@ -143,6 +144,7 @@ const ACTIVITY_WRITE_FIELDS = new Set([
   'type',
   'body',
   'note',
+  'contacts',
   'contact',
   'company',
   'deal',
@@ -388,13 +390,15 @@ async function tagExists(db: DB, tag: string): Promise<boolean> {
 }
 
 async function companySlugExists(db: DB, slug: string): Promise<boolean> {
+  const allCompanies = await db.select().from(schema.companies)
   const contacts = await db
     .select({ companies: schema.contacts.companies })
     .from(schema.contacts)
   for (const c of contacts) {
-    const companies: string[] = safeJSON(c.companies)
-    for (const name of companies) {
-      if (slugify(name) === slug) {
+    const companyIds: string[] = safeJSON(c.companies)
+    for (const compId of companyIds) {
+      const co = allCompanies.find((x) => x.id === compId)
+      if (co && slugify(co.name) === slug) {
         return true
       }
     }
@@ -619,11 +623,15 @@ async function handleReaddir(
 
   // contacts/_by-company
   if (p === 'contacts/_by-company') {
-    const all = await db.select().from(schema.contacts)
+    const allContacts = await db.select().from(schema.contacts)
+    const allCompanies = await db.select().from(schema.companies)
     const slugSet = new Set<string>()
-    for (const c of all) {
-      for (const name of safeJSON(c.companies) as string[]) {
-        slugSet.add(slugify(name))
+    for (const c of allContacts) {
+      for (const compId of safeJSON(c.companies) as string[]) {
+        const co = allCompanies.find((x) => x.id === compId)
+        if (co) {
+          slugSet.add(slugify(co.name))
+        }
       }
     }
     return { entries: [...slugSet] }
@@ -633,11 +641,15 @@ async function handleReaddir(
   if (p.startsWith('contacts/_by-company/')) {
     const cslug = p.slice('contacts/_by-company/'.length)
     if (!cslug.includes('/')) {
-      const all = await db.select().from(schema.contacts)
-      const entries = all
+      const allContacts = await db.select().from(schema.contacts)
+      const allCompanies = await db.select().from(schema.companies)
+      const entries = allContacts
         .filter((c) => {
-          const companies: string[] = safeJSON(c.companies)
-          return companies.some((name) => slugify(name) === cslug)
+          const compIds: string[] = safeJSON(c.companies)
+          return compIds.some((compId) => {
+            const co = allCompanies.find((x) => x.id === compId)
+            return co && slugify(co.name) === cslug
+          })
         })
         .map((c) => `${c.id}...${slugify(c.name || '')}.json`)
       return { entries }
@@ -1113,11 +1125,18 @@ async function writeContact(
     companies = Array.isArray(data.company) ? data.company : [data.company]
   }
   if (companies && Array.isArray(companies)) {
-    companies = companies.map((c: unknown) =>
-      typeof c === 'object' && c !== null && 'id' in c
-        ? (c as { id: string }).id
-        : c,
-    ) as string[]
+    const resolved: string[] = []
+    for (const c of companies) {
+      if (typeof c === 'object' && c !== null && 'id' in c) {
+        resolved.push((c as { id: string }).id)
+      } else if (typeof c === 'string' && c.startsWith('co_')) {
+        resolved.push(c)
+      } else if (typeof c === 'string') {
+        const coId = await getOrCreateCompanyId(db, c, config)
+        resolved.push(coId)
+      }
+    }
+    companies = resolved
   }
 
   if (id) {
@@ -1416,12 +1435,17 @@ async function writeActivity(
     return { error: 'EINVAL', msg: 'missing required field: type' }
   }
 
-  // Resolve entity_ref to contact ID
-  let contactId = (data.contact as string) || null
-  if (data.entity_ref && !contactId) {
+  // Build contacts array
+  const contacts: string[] = []
+  if (data.contacts && Array.isArray(data.contacts)) {
+    contacts.push(...(data.contacts as string[]))
+  } else if (data.contact) {
+    contacts.push(data.contact as string)
+  }
+  if (data.entity_ref && contacts.length === 0) {
     const resolved = await resolveContact(db, data.entity_ref as string, config)
     if (resolved) {
-      contactId = resolved.id
+      contacts.push(resolved.id)
     }
   }
 
@@ -1433,7 +1457,7 @@ async function writeActivity(
     id: newId,
     type: data.type as string,
     body,
-    contact: contactId,
+    contacts: JSON.stringify(contacts),
     company: (data.company as string) || null,
     deal: (data.deal as string) || null,
     custom_fields: JSON.stringify(

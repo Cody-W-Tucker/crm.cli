@@ -1167,3 +1167,48 @@ describe('company rm --force', () => {
     expect(result.stderr).toContain('--force')
   })
 })
+
+describe('company rename', () => {
+  test('renaming company does not break contact link', () => {
+    const ctx = createTestContext()
+    const coId = ctx.runOK('company', 'add', '--name', 'Old Name').trim()
+    const ctId = ctx
+      .runOK('contact', 'add', '--name', 'Jane', '--company', 'Old Name')
+      .trim()
+    ctx.runOK('company', 'edit', coId, '--name', 'New Name')
+
+    const show = ctx.runOK('contact', 'show', ctId)
+    expect(show).toContain('New Name')
+    expect(show).not.toContain('Old Name')
+  })
+
+  test('renaming company does not break deal link', () => {
+    const ctx = createTestContext()
+    const coId = ctx.runOK('company', 'add', '--name', 'Old Corp').trim()
+    ctx.runOK('deal', 'add', '--title', 'Big Deal', '--company', 'Old Corp')
+    ctx.runOK('company', 'edit', coId, '--name', 'New Corp')
+
+    const deals = ctx.runJSON<{ company: string }[]>(
+      'deal',
+      'list',
+      '--format',
+      'json',
+    )
+    expect(deals[0].company).toBe(coId)
+  })
+
+  test('renaming contact does not break deal link', () => {
+    const ctx = createTestContext()
+    const ctId = ctx.runOK('contact', 'add', '--name', 'Old Name').trim()
+    ctx.runOK('deal', 'add', '--title', 'Deal', '--contact', ctId)
+    ctx.runOK('contact', 'edit', ctId, '--name', 'New Name')
+
+    const deals = ctx.runJSON<{ contacts: string[] }[]>(
+      'deal',
+      'list',
+      '--format',
+      'json',
+    )
+    expect(deals[0].contacts).toContain(ctId)
+  })
+})

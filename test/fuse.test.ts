@@ -836,7 +836,7 @@ describe('fuse: reports', () => {
         id,
         '--stage',
         'closed-lost',
-        '--reason',
+        '--note',
         'Too expensive',
       )
 
@@ -845,7 +845,7 @@ describe('fuse: reports', () => {
       )
       expect(data).toHaveLength(1)
       expect(data[0].title).toBe('Loser')
-      expect(data[0].reason).toContain('Too expensive')
+      expect(data[0].notes).toContain('Too expensive')
     } finally {
       unmount(ctx)
     }

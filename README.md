@@ -276,7 +276,14 @@ crm company list --filter "industry=SaaS" --format json
 crm company list --tag enterprise --sort name
 ```
 
-Same filtering/sorting flags as `crm contact list`.
+| Flag | Description |
+|------|-------------|
+| `--tag` | Filter by tag |
+| `--filter` | Filter expression (see Filtering) |
+| `--sort` | Sort field: `name`, `website`, `created`, `updated` |
+| `--reverse` | Reverse sort order |
+| `--limit` | Max results |
+| `--offset` | Skip N results |
 
 #### `crm company show <id-or-website-or-phone>`
 
@@ -310,7 +317,7 @@ crm company edit acme.com --rm-website old-acme.com --rm-phone "+1-415-555-0000"
 
 #### `crm company rm <id-or-website-or-phone>`
 
-Same pattern as `crm contact rm`. Unlinks contacts and deals but does not delete them.
+Prompts for confirmation unless `--force` is passed. Unlinks contacts and deals but does not delete them.
 
 #### `crm company merge <id> <id>`
 
@@ -365,6 +372,9 @@ crm deal list --min-value 10000 --max-value 100000
 | `--max-value` | Maximum deal value |
 | `--tag` | Filter by tag |
 | `--sort` | Sort: `title`, `value`, `stage`, `created`, `updated`, `expected-close` |
+| `--reverse` | Reverse sort order |
+| `--limit` | Max results |
+| `--offset` | Skip first N results |
 
 #### `crm deal show <id>`
 
@@ -393,16 +403,16 @@ Same pattern as other entities. `--stage` is NOT used here — use `crm deal mov
 ```bash
 crm deal move dl_01J8Z... --stage negotiation
 crm deal move dl_01J8Z... --stage closed-won --note "Signed annual contract"
-crm deal move dl_01J8Z... --stage closed-lost --reason "Budget cut"
+crm deal move dl_01J8Z... --stage closed-lost --note "Budget cut"
 ```
 
-Records the stage transition with a timestamp by creating a `stage-change` activity entry. This activity includes the old stage, new stage, and timestamp. Stage history is reconstructed from these activity entries — `crm deal show` includes a `stage_history` array with `{stage, at}` pairs. `--note` attaches a note to the transition. `--reason` is specifically for closed-lost deals.
+Records the stage transition with a timestamp by creating a `stage-change` activity entry. This activity includes the old stage, new stage, and timestamp. Stage history is reconstructed from these activity entries — `crm deal show` includes a `stage_history` array with `{stage, at}` pairs. `--note` attaches a note to the transition (shown in `crm report won` and `crm report lost`).
 
 Moving a deal to its current stage is rejected with an error.
 
 #### `crm deal rm <id>`
 
-Same pattern as other entities.
+Prompts for confirmation unless `--force` is passed.
 
 #### `crm pipeline`
 
@@ -447,6 +457,7 @@ crm log email jane@acme.com "Sent proposal PDF"
 
 | Flag | Description |
 |------|-------------|
+| `--contact` | Link additional contact(s) (repeatable) |
 | `--deal` | Also link this activity to a deal |
 | `--at` | Override timestamp (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`) |
 | `--set` | Custom field `key=value` (e.g. `--set duration=15m`) |
@@ -469,7 +480,6 @@ crm activity list --limit 20
 | `--deal` | Filter by deal |
 | `--type` | Filter by activity type |
 | `--since` | Activities after date |
-| `--until` | Activities before date |
 | `--limit` | Max results |
 
 ---
@@ -545,22 +555,21 @@ Output includes both candidate entities plus the reasons they were flagged. Exac
 
 #### `crm find <query>`
 
-Semantic / natural language search using local embeddings.
+Full-text keyword search across all entities using SQLite FTS5.
 
 ```bash
-crm find "the CTO from that fintech company"
-crm find "deals we haven't touched in 2 weeks"
-crm find "everyone I met at the conference last month"
-crm find "companies in the healthcare space"
+crm find "fintech"
+crm find "enterprise SaaS"
+crm find "jane"
 ```
 
-Uses a local embedding model (`mxbai-embed-xsmall-v1` via ONNX) — no API keys, no network calls. The model downloads on first use and caches at `~/.crm/models/`.
+Uses SQLite's built-in FTS5 full-text search — no API keys, no network calls, no external dependencies. The search index is automatically maintained as you add/edit entities.
 
 | Flag | Description |
 |------|-------------|
 | `--type` | Restrict to entity types |
 | `--limit` | Max results (default: 10) |
-| `--threshold` | Minimum similarity score 0.0-1.0 (default: 0.3) |
+| `--threshold` | Minimum keyword match score 0.0-1.0 (default: 0.3) |
 
 #### `crm index`
 
@@ -658,8 +667,10 @@ Summary of closed deals.
 
 ```bash
 crm report won --period 30d
-crm report lost --period 30d --reasons     # includes loss reasons
+crm report lost --period 30d
 ```
+
+Both reports include a `notes` field with any notes attached via `crm deal move --note`.
 
 ---
 
@@ -761,7 +772,7 @@ Only a small set of fields are hard-coded per entity — everything else lives i
 | Contact | `name`, `emails[]`, `phones[]`, `companies[]`, `linkedin`, `x`, `bluesky`, `telegram`, `tags[]` | title, source, notes, ... |
 | Company | `name`, `websites[]`, `phones[]`, `tags[]` | industry, size, founded, ... |
 | Deal | `title`, `value`, `stage`, `contacts[]` (multi), `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
-| Activity | `type`, `entity_ref`, `note`, `deal`, `at` | duration, outcome, attendees, ... |
+| Activity | `type`, `body`, `contacts[]` (multi), `company`, `deal`, `created_at` | duration, outcome, attendees, ... |
 
 Hard-coded fields drive business logic (entity resolution, pipeline math, relationships, reports). Custom fields are metadata — flexible, filterable, but no special behavior.
 
@@ -1101,7 +1112,7 @@ find ~/crm/deals/_by-stage/lead/ -name "*.json" | xargs jq '.value'
 
 Writes are **full-document replacements** — the JSON you write becomes the complete state of the entity. This matches how files work: read → modify → write back.
 
-**Validation is strict.** Every write goes through the same Zod schema validation as the CLI:
+**Validation is strict.** Every write is validated before being applied:
 
 | Error | errno | Feedback |
 |-------|-------|----------|
@@ -1190,7 +1201,6 @@ search_limit = 20               # max results for search/ virtual files
 - **Database:** SQLite via [libSQL](https://github.com/tursodatabase/libsql) + [Drizzle ORM](https://orm.drizzle.team)
 - **Phone normalization:** [libphonenumber-js](https://gitlab.com/nicolo-ribaudo/libphonenumber-js) (E.164)
 - **Website normalization:** [normalize-url](https://github.com/sindresorhus/normalize-url)
-- **Validation:** [Zod](https://zod.dev)
 - **Linting:** [Biome](https://biomejs.dev) via [Ultracite](https://github.com/haydenbleasel/ultracite)
 - **Testing:** `bun test` (functional tests at the CLI level)
 
@@ -1233,17 +1243,12 @@ The install script (`install.sh`) handles:
 1. Detecting your platform (Linux/macOS, x64/arm64)
 2. Downloading the correct binary from GitHub Releases
 3. Installing it to `~/.local/bin` (or `/usr/local/bin` with sudo)
-4. Optionally installing FUSE dependencies if not present:
+4. Installing FUSE dependencies:
    - Linux: `libfuse3-dev` via apt/yum/pacman
    - macOS: `macfuse` via Homebrew
-5. Optionally installing the ONNX runtime for semantic search (`crm find`)
 
 ```bash
-# Full install with all optional dependencies
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh -s -- --all
-
-# Binary only (no FUSE, no semantic search)
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh -s -- --minimal
+curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
 ```
 
 ### CI/CD

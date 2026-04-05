@@ -226,3 +226,105 @@ describe('activity list', () => {
     expect(activities).toHaveLength(1)
   })
 })
+
+describe('multi-contact activity', () => {
+  test('log with additional --contact flags', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+    ctx.runOK(
+      'log',
+      'meeting',
+      'jane@acme.com',
+      'Joint call',
+      '--contact',
+      'bob@acme.com',
+    )
+
+    const janeActs = ctx.runJSON<unknown[]>(
+      'activity',
+      'list',
+      '--contact',
+      'jane@acme.com',
+      '--format',
+      'json',
+    )
+    expect(janeActs).toHaveLength(1)
+
+    const bobActs = ctx.runJSON<unknown[]>(
+      'activity',
+      'list',
+      '--contact',
+      'bob@acme.com',
+      '--format',
+      'json',
+    )
+    expect(bobActs).toHaveLength(1)
+  })
+
+  test('contacts array in json output', () => {
+    const ctx = createTestContext()
+    const id1 = ctx
+      .runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+      .trim()
+    const id2 = ctx
+      .runOK('contact', 'add', '--name', 'Bob', '--email', 'bob@acme.com')
+      .trim()
+    ctx.runOK(
+      'log',
+      'call',
+      'jane@acme.com',
+      'Group call',
+      '--contact',
+      'bob@acme.com',
+    )
+
+    const activities = ctx.runJSON<Array<{ contacts: string[] }>>(
+      'activity',
+      'list',
+      '--format',
+      'json',
+    )
+    expect(activities).toHaveLength(1)
+    expect(activities[0].contacts).toContain(id1)
+    expect(activities[0].contacts).toContain(id2)
+  })
+
+  test('activity on company has empty contacts array', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com')
+    ctx.runOK('log', 'note', 'acme.com', 'Company note')
+
+    const activities = ctx.runJSON<Array<{ contacts: string[] }>>(
+      'activity',
+      'list',
+      '--format',
+      'json',
+    )
+    expect(activities[0].contacts).toEqual([])
+  })
+
+  test('--contact on non-contact entity adds contacts', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK('company', 'add', '--name', 'Acme', '--website', 'acme.com')
+    ctx.runOK(
+      'log',
+      'note',
+      'acme.com',
+      'Met with Jane',
+      '--contact',
+      'jane@acme.com',
+    )
+
+    const janeActs = ctx.runJSON<unknown[]>(
+      'activity',
+      'list',
+      '--contact',
+      'jane@acme.com',
+      '--format',
+      'json',
+    )
+    expect(janeActs).toHaveLength(1)
+  })
+})

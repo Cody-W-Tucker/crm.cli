@@ -75,6 +75,9 @@ export async function generateFS(
   ensureDir(join(outDir, 'reports'))
   ensureDir(join(outDir, 'search'))
 
+  // Pre-fetch companies for ID→name resolution
+  const companies = await db.select().from(schema.companies)
+
   // Write contacts
   const contacts = await db.select().from(schema.contacts)
   for (const c of contacts) {
@@ -121,9 +124,10 @@ export async function generateFS(
       )
     }
 
-    const companies: string[] = safeJSON(c.companies)
-    for (const compName of companies) {
-      const compSlug = slugify(compName)
+    const companyIds: string[] = safeJSON(c.companies)
+    for (const compId of companyIds) {
+      const compRecord = companies.find((co) => co.id === compId)
+      const compSlug = slugify(compRecord?.name || compId)
       ensureDir(join(outDir, 'contacts', '_by-company', compSlug))
       copyFileSync(
         filePath,
@@ -139,7 +143,6 @@ export async function generateFS(
   }
 
   // Write companies
-  const companies = await db.select().from(schema.companies)
   for (const co of companies) {
     const data = await buildCompanyJSON(db, co)
     const filename = companyFilename(co)
@@ -216,13 +219,14 @@ export async function generateFS(
     const filePath = join(outDir, 'activities', filename)
     writeJSON(filePath, data)
 
-    if (a.contact) {
+    const actContacts: string[] = safeJSON(a.contacts)
+    for (const contactId of actContacts) {
       const contactResults = await db
         .select()
         .from(schema.contacts)
-        .where(eq(schema.contacts.id, a.contact))
+        .where(eq(schema.contacts.id, contactId))
       if (contactResults[0]) {
-        const contactSlug = `${a.contact}...${slugify(contactResults[0].name || '')}`
+        const contactSlug = `${contactId}...${slugify(contactResults[0].name || '')}`
         ensureDir(join(outDir, 'activities', '_by-contact', contactSlug))
         copyFileSync(
           filePath,

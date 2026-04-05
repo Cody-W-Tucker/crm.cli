@@ -358,7 +358,7 @@ describe('export-fs', () => {
       id,
       '--stage',
       'closed-lost',
-      '--reason',
+      '--note',
       'Budget cut',
     )
     const outDir = join(ctx.dir, 'export')
@@ -368,7 +368,7 @@ describe('export-fs', () => {
     )
     expect(data).toHaveLength(1)
     expect(data[0].title).toBe('Lost Deal')
-    expect(data[0].reason).toContain('Budget cut')
+    expect(data[0].notes).toContain('Budget cut')
   })
 
   test('reports/velocity.json has timing data per stage', () => {

@@ -2,7 +2,7 @@ import type { Command } from 'commander'
 import { eq } from 'drizzle-orm'
 
 import * as schema from '../drizzle-schema'
-import { formatOutput } from '../format'
+import { formatOutput, safeJSON } from '../format'
 import { getCtx } from '../lib/helpers'
 import {
   computeConversion,
@@ -50,8 +50,18 @@ export function registerReportCommands(program: Command) {
       const groupBy = opts.by || 'type'
       const groups: Record<string, number> = {}
       for (const a of activities) {
-        const key = groupBy === 'contact' ? a.contact || 'none' : a.type
-        groups[key] = (groups[key] || 0) + 1
+        if (groupBy === 'contact') {
+          const contacts: string[] = safeJSON(a.contacts)
+          if (contacts.length === 0) {
+            groups.none = (groups.none || 0) + 1
+          } else {
+            for (const cid of contacts) {
+              groups[cid] = (groups[cid] || 0) + 1
+            }
+          }
+        } else {
+          groups[a.type] = (groups[a.type] || 0) + 1
+        }
       }
       let data: Record<string, unknown>[]
       if (groupBy === 'contact') {
@@ -184,7 +194,6 @@ export function registerReportCommands(program: Command) {
 
   cmd
     .command('lost')
-    .option('--reasons', 'Show loss reasons')
     .option('--period <period>', 'Time period')
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
@@ -194,12 +203,6 @@ export function registerReportCommands(program: Command) {
         if (cutoff) {
           data = data.filter((d) => (d.updated_at as string) >= cutoff)
         }
-      }
-      if (!opts.reasons) {
-        data = data.map((d) => {
-          const { reason: _, ...rest } = d
-          return rest
-        })
       }
       if (fmt === 'json') {
         console.log(JSON.stringify(data, null, 2))

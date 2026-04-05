@@ -316,7 +316,7 @@ describe('report won/lost', () => {
     expect(out).toContain('25000')
   })
 
-  test('report lost shows reasons', () => {
+  test('report lost shows notes', () => {
     const ctx = createTestContext()
     const id = ctx
       .runOK(
@@ -336,11 +336,11 @@ describe('report won/lost', () => {
       id,
       '--stage',
       'closed-lost',
-      '--reason',
+      '--note',
       'Too expensive',
     )
 
-    const out = ctx.runOK('report', 'lost', '--reasons')
+    const out = ctx.runOK('report', 'lost')
     expect(out).toContain('Lost Deal')
     expect(out).toContain('Too expensive')
   })
@@ -372,12 +372,12 @@ describe('report won/lost', () => {
     expect(report).toHaveLength(1)
   })
 
-  test('report lost without --reasons omits reason field', () => {
+  test('report lost always includes notes field', () => {
     const ctx = createTestContext()
     const id = ctx
       .runOK('deal', 'add', '--title', 'Lost', '--stage', 'lead')
       .trim()
-    ctx.runOK('deal', 'move', id, '--stage', 'closed-lost', '--reason', 'Price')
+    ctx.runOK('deal', 'move', id, '--stage', 'closed-lost', '--note', 'Price')
 
     const report = ctx.runJSON<Record<string, unknown>[]>(
       'report',
@@ -386,7 +386,8 @@ describe('report won/lost', () => {
       'json',
     )
     expect(report).toHaveLength(1)
-    expect(report[0]).not.toHaveProperty('reason')
+    expect(report[0]).toHaveProperty('notes')
+    expect(report[0].notes).toContain('Price')
   })
 
   test('report lost with --period filters old deals', () => {
@@ -405,6 +406,40 @@ describe('report won/lost', () => {
       'json',
     )
     expect(report).toHaveLength(1)
+  })
+
+  test('report won includes notes', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK(
+        'deal',
+        'add',
+        '--title',
+        'Won With Note',
+        '--value',
+        '30000',
+        '--stage',
+        'lead',
+      )
+      .trim()
+    ctx.runOK(
+      'deal',
+      'move',
+      id,
+      '--stage',
+      'closed-won',
+      '--note',
+      'Signed annual contract',
+    )
+
+    const report = ctx.runJSON<Array<{ notes: string }>>(
+      'report',
+      'won',
+      '--format',
+      'json',
+    )
+    expect(report).toHaveLength(1)
+    expect(report[0].notes).toContain('Signed annual contract')
   })
 
   test('report won json format includes all deal fields', () => {
@@ -654,21 +689,20 @@ describe('report edge cases', () => {
     expect(typeof lead!.avg_display).toBe('string')
   })
 
-  test('lost deal with no reason returns empty reason', () => {
+  test('lost deal with no note returns empty notes', () => {
     const ctx = createTestContext()
     const id = ctx
       .runOK('deal', 'add', '--title', 'No Reason', '--stage', 'lead')
       .trim()
     ctx.runOK('deal', 'move', id, '--stage', 'closed-lost')
 
-    const report = ctx.runJSON<Array<{ reason: string }>>(
+    const report = ctx.runJSON<Array<{ notes: string }>>(
       'report',
       'lost',
-      '--reasons',
       '--format',
       'json',
     )
     expect(report).toHaveLength(1)
-    expect(report[0].reason).toBe('')
+    expect(report[0].notes).toBe('')
   })
 })

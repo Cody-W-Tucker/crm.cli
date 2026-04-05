@@ -300,7 +300,6 @@ export function registerDealCommands(program: Command) {
     .argument('<ref>')
     .requiredOption('--stage <stage>', 'Target stage')
     .option('--note <text>', 'Note')
-    .option('--reason <text>', 'Reason')
     .action(async (ref, opts) => {
       const { db, config } = await getCtx()
       const d = await resolveDeal(db, ref)
@@ -320,7 +319,6 @@ export function registerDealCommands(program: Command) {
           from: oldStage,
           to: opts.stage,
           note: opts.note,
-          reason: opts.reason,
         })
       ) {
         die('Error: pre-deal-stage-change hook rejected stage move')
@@ -333,9 +331,6 @@ export function registerDealCommands(program: Command) {
       let body = `from ${oldStage} to ${opts.stage}`
       if (opts.note) {
         body += ` | ${opts.note}`
-      }
-      if (opts.reason) {
-        body += ` | ${opts.reason}`
       }
       const aid = makeId('ac')
       await db.insert(schema.activities).values({
@@ -351,7 +346,6 @@ export function registerDealCommands(program: Command) {
         from: oldStage,
         to: opts.stage,
         note: opts.note,
-        reason: opts.reason,
       })
     })
 

@@ -418,6 +418,17 @@ describe('contact list', () => {
     expect(lines[1]).toContain('alice@example.com')
   })
 
+  test('format tsv has tab-separated columns', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Alice', '--email', 'alice@co.com')
+
+    const out = ctx.runOK('contact', 'list', '--format', 'tsv')
+    const lines = out.trim().split('\n')
+    expect(lines.length).toBeGreaterThanOrEqual(2)
+    expect(lines[0]).toContain('\t')
+    expect(lines[1]).toContain('Alice')
+  })
+
   test('filter expression on custom fields', () => {
     const ctx = createTestContext()
     ctx.runOK(
@@ -662,6 +673,33 @@ describe('contact edit', () => {
       'json',
     )
     expect(data.custom_fields.score).toBe(85)
+    expect(data.custom_fields.tags).toEqual(['a', 'b'])
+  })
+
+  test('unset removes json: custom field', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK(
+        'contact',
+        'add',
+        '--name',
+        'Jane',
+        '--set',
+        'json:score=85',
+        '--set',
+        'json:tags=["a","b"]',
+      )
+      .trim()
+    ctx.runOK('contact', 'edit', id, '--unset', 'score')
+
+    const data = ctx.runJSON<{ custom_fields: Record<string, unknown> }>(
+      'contact',
+      'show',
+      id,
+      '--format',
+      'json',
+    )
+    expect(data.custom_fields.score).toBeUndefined()
     expect(data.custom_fields.tags).toEqual(['a', 'b'])
   })
 

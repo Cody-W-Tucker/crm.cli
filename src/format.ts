@@ -228,7 +228,7 @@ export function activityToRow(a: Activity): Record<string, unknown> {
     id: a.id,
     type: a.type,
     body: a.body,
-    contact: a.contact || null,
+    contacts: safeJSON(a.contacts),
     company: a.company || null,
     deal: a.deal || null,
     custom_fields: safeJSON(a.custom_fields),

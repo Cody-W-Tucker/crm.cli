@@ -271,11 +271,11 @@ export function registerCompanyCommands(program: Command) {
       const allContacts = await db.select().from(schema.contacts)
       for (const ct of allContacts) {
         const companies: string[] = safeJSON(ct.companies)
-        if (companies.includes(co.name)) {
+        if (companies.includes(co.id)) {
           await db
             .update(schema.contacts)
             .set({
-              companies: JSON.stringify(companies.filter((n) => n !== co.name)),
+              companies: JSON.stringify(companies.filter((n) => n !== co.id)),
             })
             .where(eq(schema.contacts.id, ct.id))
         }
@@ -329,9 +329,9 @@ export function registerCompanyCommands(program: Command) {
       const allContacts = await db.select().from(schema.contacts)
       for (const ct of allContacts) {
         const companies: string[] = safeJSON(ct.companies)
-        if (companies.includes(c2.name)) {
+        if (companies.includes(c2.id)) {
           const updated = [
-            ...new Set(companies.map((n) => (n === c2.name ? c1.name : n))),
+            ...new Set(companies.map((n) => (n === c2.id ? c1.id : n))),
           ]
           await db
             .update(schema.contacts)

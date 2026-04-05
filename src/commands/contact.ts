@@ -16,7 +16,7 @@ import {
   contactDetail,
   die,
   getCtx,
-  getOrCreateCompany,
+  getOrCreateCompanyId,
   makeId,
   now,
   parseKV,
@@ -27,7 +27,7 @@ import {
   normalizeSocialHandle,
   tryNormalizePhone,
 } from '../normalize'
-import { resolveContact } from '../resolve'
+import { resolveCompany, resolveContact } from '../resolve'
 
 export function registerContactCommands(program: Command) {
   const cmd = program.command('contact').description('Manage contacts')
@@ -85,7 +85,7 @@ export function registerContactCommands(program: Command) {
       }
       const companies: string[] = []
       for (const c of opts.company) {
-        companies.push(await getOrCreateCompany(db, c, config))
+        companies.push(await getOrCreateCompanyId(db, c, config))
       }
       const custom = parseKV(opts.set)
       if (
@@ -124,7 +124,12 @@ export function registerContactCommands(program: Command) {
         .from(schema.contacts)
         .where(eq(schema.contacts.id, cid))
       const row = results[0]
-      await upsertSearchIndex(db, 'contact', cid, buildContactSearch(row))
+      await upsertSearchIndex(
+        db,
+        'contact',
+        cid,
+        await buildContactSearch(db, row),
+      )
       runHook(config, 'post-contact-add', {
         id: cid,
         name: opts.name,
@@ -161,9 +166,14 @@ export function registerContactCommands(program: Command) {
         )
       }
       if (opts.company) {
-        rows = rows.filter((c) =>
-          (c.companies as string[] | undefined)?.includes(opts.company),
-        )
+        const co = await resolveCompany(db, opts.company, config)
+        if (co) {
+          rows = rows.filter((c) =>
+            (c.companies as string[] | undefined)?.includes(co.id),
+          )
+        } else {
+          rows = []
+        }
       }
       if (opts.filter) {
         const f = parseFilter(opts.filter)
@@ -259,13 +269,16 @@ export function registerContactCommands(program: Command) {
           : phones.filter((v) => v !== p)
       }
       for (const co of opts.addCompany) {
-        const n = await getOrCreateCompany(db, co, config)
-        if (!companies.includes(n)) {
-          companies.push(n)
+        const coId = await getOrCreateCompanyId(db, co, config)
+        if (!companies.includes(coId)) {
+          companies.push(coId)
         }
       }
       for (const co of opts.rmCompany) {
-        companies = companies.filter((v) => v !== co)
+        const resolved = await resolveCompany(db, co, config)
+        if (resolved) {
+          companies = companies.filter((v) => v !== resolved.id)
+        }
       }
       for (const t of opts.addTag) {
         if (!tags.includes(t)) {
@@ -344,7 +357,12 @@ export function registerContactCommands(program: Command) {
         .from(schema.contacts)
         .where(eq(schema.contacts.id, c.id))
       const row = results[0]
-      await upsertSearchIndex(db, 'contact', c.id, buildContactSearch(row))
+      await upsertSearchIndex(
+        db,
+        'contact',
+        c.id,
+        await buildContactSearch(db, row),
+      )
       runHook(config, 'post-contact-edit', {
         id: c.id,
         name,
@@ -456,10 +474,19 @@ export function registerContactCommands(program: Command) {
             .where(eq(schema.deals.id, d.id))
         }
       }
-      await db
-        .update(schema.activities)
-        .set({ contact: c1.id })
-        .where(eq(schema.activities.contact, c2.id))
+      const allActivities = await db.select().from(schema.activities)
+      for (const a of allActivities) {
+        const contacts: string[] = safeJSON(a.contacts)
+        if (contacts.includes(c2.id)) {
+          const updated = [
+            ...new Set(contacts.map((id) => (id === c2.id ? c1.id : id))),
+          ]
+          await db
+            .update(schema.activities)
+            .set({ contacts: JSON.stringify(updated) })
+            .where(eq(schema.activities.id, a.id))
+        }
+      }
       await db.delete(schema.contacts).where(eq(schema.contacts.id, c2.id))
       await removeSearchIndex(db, c2.id)
       const results = await db
@@ -467,6 +494,11 @@ export function registerContactCommands(program: Command) {
         .from(schema.contacts)
         .where(eq(schema.contacts.id, c1.id))
       const row = results[0]
-      await upsertSearchIndex(db, 'contact', c1.id, buildContactSearch(row))
+      await upsertSearchIndex(
+        db,
+        'contact',
+        c1.id,
+        await buildContactSearch(db, row),
+      )
     })
 }

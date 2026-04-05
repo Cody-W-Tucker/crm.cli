@@ -37,15 +37,15 @@ export async function buildContactJSON(
 ): Promise<Record<string, unknown>> {
   const emails: string[] = safeJSON(c.emails)
   const phones: string[] = safeJSON(c.phones)
-  const companyNames: string[] = safeJSON(c.companies)
+  const companyIds: string[] = safeJSON(c.companies)
   const tags: string[] = safeJSON(c.tags)
   const customFields = safeJSON(c.custom_fields) || {}
 
   const allCompanies = await db.select().from(schema.companies)
-  const linkedCompanies = companyNames
-    .map((name) => {
-      const co = allCompanies.find((x) => x.name === name)
-      return co ? { id: co.id, name: co.name } : { name }
+  const linkedCompanies = companyIds
+    .map((id) => {
+      const co = allCompanies.find((x) => x.id === id)
+      return co ? { id: co.id, name: co.name } : { id }
     })
     .filter(Boolean)
 
@@ -59,7 +59,10 @@ export async function buildContactJSON(
 
   const activities = await db.select().from(schema.activities)
   const contactActivities = activities
-    .filter((a) => a.contact === c.id)
+    .filter((a) => {
+      const contacts: string[] = safeJSON(a.contacts)
+      return contacts.includes(c.id)
+    })
     .sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''))
     .slice(0, config.mount.max_recent_activity)
     .map((a) => ({
@@ -102,7 +105,7 @@ export async function buildCompanyJSON(
   const linkedContacts = allContacts
     .filter((c) => {
       const companies: string[] = safeJSON(c.companies)
-      return companies.includes(co.name)
+      return companies.includes(co.id)
     })
     .map((c) => ({ id: c.id, name: c.name }))
 
@@ -202,7 +205,7 @@ export function buildActivityJSON(a: Activity): Record<string, unknown> {
     id: a.id,
     type: a.type,
     body: a.body,
-    contact: a.contact,
+    contacts: safeJSON(a.contacts),
     company: a.company,
     deal: a.deal,
     custom_fields:

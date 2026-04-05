@@ -16,6 +16,7 @@ export function registerLogCommand(program: Command) {
     .argument('<type>', 'Activity type (note, call, meeting, email)')
     .argument('<ref>', 'Entity reference')
     .argument('<body>', 'Activity body')
+    .option('--contact <ref>', 'Additional contact', collect, [])
     .option('--deal <id>', 'Link to deal')
     .option('--at <date>', 'Custom timestamp')
     .option('--set <kv>', 'Custom field', collect, [])
@@ -33,15 +34,24 @@ export function registerLogCommand(program: Command) {
       const id = makeId('ac')
       const ts = opts.at || now()
       const custom = parseKV(opts.set)
-      let contact: string | null = null
+      const contacts: string[] = []
       let company: string | null = null
       let deal: string | null = null
       if (resolved.type === 'contact') {
-        contact = resolved.entity.id
+        contacts.push(resolved.entity.id)
       } else if (resolved.type === 'company') {
         company = resolved.entity.id
       } else if (resolved.type === 'deal') {
         deal = resolved.entity.id
+      }
+      for (const cRef of opts.contact) {
+        const ct = await resolveContact(db, cRef, config)
+        if (!ct) {
+          die(`Error: contact not found: ${cRef}`)
+        }
+        if (!contacts.includes(ct.id)) {
+          contacts.push(ct.id)
+        }
       }
       if (opts.deal) {
         deal = opts.deal
@@ -50,7 +60,7 @@ export function registerLogCommand(program: Command) {
         !runHook(config, 'pre-activity-add', {
           type,
           body,
-          contact,
+          contacts,
           company,
           deal,
           custom_fields: custom,
@@ -62,7 +72,7 @@ export function registerLogCommand(program: Command) {
         id,
         type,
         body,
-        contact,
+        contacts: JSON.stringify(contacts),
         company,
         deal,
         custom_fields: JSON.stringify(custom),
@@ -73,7 +83,7 @@ export function registerLogCommand(program: Command) {
         id,
         type,
         body,
-        contact,
+        contacts,
         company,
         deal,
         custom_fields: custom,
@@ -99,7 +109,7 @@ export function registerActivityCommands(program: Command) {
       if (opts.contact) {
         const ct = await resolveContact(db, opts.contact, config)
         if (ct) {
-          rows = rows.filter((a) => a.contact === ct.id)
+          rows = rows.filter((a) => (a.contacts as string[]).includes(ct.id))
         } else {
           rows = []
         }

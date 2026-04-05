@@ -31,18 +31,22 @@ export async function computeStale(
   const results: Record<string, unknown>[] = []
 
   const contacts = await db.select().from(schema.contacts)
+  const allActivities = await db.select().from(schema.activities)
   for (const c of contacts) {
-    const lastActivity = (
-      (await db.all(
-        sql`SELECT MAX(created_at) as last FROM activities WHERE contact = ${c.id}`,
-      )) as { last: string | null }[]
-    )[0]
-    if (!lastActivity?.last || lastActivity.last < cutoff) {
+    const contactActivities = allActivities.filter((a) => {
+      const linked: string[] = JSON.parse(a.contacts || '[]')
+      return linked.includes(c.id)
+    })
+    const last = contactActivities.reduce<string | null>(
+      (max, a) => (max && max > a.created_at ? max : a.created_at),
+      null,
+    )
+    if (!last || last < cutoff) {
       results.push({
         type: 'contact',
         id: c.id,
         name: c.name,
-        last_activity: lastActivity?.last || null,
+        last_activity: last,
       })
     }
   }
@@ -52,18 +56,18 @@ export async function computeStale(
     if (terminal.has(d.stage)) {
       continue
     }
-    const lastActivity = (
-      (await db.all(
-        sql`SELECT MAX(created_at) as last FROM activities WHERE deal = ${d.id}`,
-      )) as { last: string | null }[]
-    )[0]
-    const lastTouch = lastActivity?.last || d.created_at
+    const dealActivities = allActivities.filter((a) => a.deal === d.id)
+    const last = dealActivities.reduce<string | null>(
+      (max, a) => (max && max > a.created_at ? max : a.created_at),
+      null,
+    )
+    const lastTouch = last || d.created_at
     if (lastTouch < cutoff) {
       results.push({
         type: 'deal',
         id: d.id,
         title: d.title,
-        last_activity: lastActivity?.last || null,
+        last_activity: last,
       })
     }
   }
@@ -213,11 +217,18 @@ export async function computeForecast(db: DB, config: CRMConfig) {
 }
 
 export async function computeWon(db: DB, config: CRMConfig) {
+  const wonStage = config.pipeline.won_stage
   const deals = await db
     .select()
     .from(schema.deals)
-    .where(eq(schema.deals.stage, config.pipeline.won_stage))
-  return deals.map((d) => dealToRow(d, config))
+    .where(eq(schema.deals.stage, wonStage))
+  return Promise.all(
+    deals.map(async (d) => {
+      const row: Record<string, unknown> = dealToRow(d, config)
+      row.notes = await extractStageNotes(db, d.id, wonStage)
+      return row
+    }),
+  )
 }
 
 export async function computeLost(db: DB, config: CRMConfig) {
@@ -229,17 +240,26 @@ export async function computeLost(db: DB, config: CRMConfig) {
   return Promise.all(
     deals.map(async (d) => {
       const row: Record<string, unknown> = dealToRow(d, config)
-      const actResults = (await db.all(
-        sql`SELECT body FROM activities WHERE deal = ${d.id} AND type = 'stage-change' AND body LIKE ${`%${lostStage}%`}`,
-      )) as { body: string | null }[]
-      const act = actResults[0]
-      row.reason =
-        act?.body
-          ?.split('|')
-          .slice(1)
-          .map((s: string) => s.trim())
-          .join(', ') || ''
+      row.notes = await extractStageNotes(db, d.id, lostStage)
       return row
     }),
+  )
+}
+
+async function extractStageNotes(
+  db: DB,
+  dealId: string,
+  stage: string,
+): Promise<string> {
+  const actResults = (await db.all(
+    sql`SELECT body FROM activities WHERE deal = ${dealId} AND type = 'stage-change' AND body LIKE ${`%${stage}%`}`,
+  )) as { body: string | null }[]
+  const act = actResults[0]
+  return (
+    act?.body
+      ?.split('|')
+      .slice(1)
+      .map((s: string) => s.trim())
+      .join(', ') || ''
   )
 }

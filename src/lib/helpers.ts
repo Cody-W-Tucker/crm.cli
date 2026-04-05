@@ -98,31 +98,6 @@ export function parseKV(arr: string[]): Record<string, unknown> {
   return r
 }
 
-export async function getOrCreateCompany(
-  db: DB,
-  ref: string,
-  config: CRMConfig,
-): Promise<string> {
-  const co = await resolveCompanyForLink(db, ref, config)
-  if (co) {
-    return co.name
-  }
-  const cid = makeId('co')
-  const n = now()
-  await db.insert(schema.companies).values({
-    id: cid,
-    name: ref,
-    websites: '[]',
-    phones: '[]',
-    tags: '[]',
-    custom_fields: '{}',
-    created_at: n,
-    updated_at: n,
-  })
-  await upsertSearchIndex(db, 'company', cid, ref)
-  return ref
-}
-
 export async function getOrCreateCompanyId(
   db: DB,
   ref: string,
@@ -228,12 +203,17 @@ export async function checkDupeSocial(
   }
 }
 
-export function buildContactSearch(c: Contact): string {
+export async function buildContactSearch(db: DB, c: Contact): Promise<string> {
+  const companyIds: string[] = safeJSON(c.companies)
+  const allCompanies = await db.select().from(schema.companies)
+  const companyNames = companyIds
+    .map((id) => allCompanies.find((co) => co.id === id)?.name)
+    .filter(Boolean)
   return [
     c.name,
     c.emails,
     c.phones,
-    c.companies,
+    companyNames.join(' '),
     c.linkedin,
     c.x,
     c.bluesky,
@@ -273,6 +253,12 @@ export async function contactDetail(
   row._display_phones = phones.map((p) =>
     formatPhone(p, config.phone.display, config.phone.default_country),
   )
+  const companyIds: string[] = safeJSON(c.companies)
+  const allCompanies = await db.select().from(schema.companies)
+  row.companies = companyIds.map((id) => {
+    const co = allCompanies.find((x) => x.id === id)
+    return co ? co.name : id
+  })
   const allDeals = await db.select().from(schema.deals)
   row.deals = allDeals
     .filter((d) => {
@@ -293,14 +279,11 @@ export async function companyDetail(
   row._display_phones = phones.map((p) =>
     formatPhone(p, config.phone.display, config.phone.default_country),
   )
-  const linkedContacts = await db
-    .select()
-    .from(schema.contacts)
-    .where(sql`${schema.contacts.companies} LIKE ${`%${co.name}%`}`)
+  const linkedContacts = await db.select().from(schema.contacts)
   row.contacts = linkedContacts
     .filter((ct) => {
       const companies: string[] = safeJSON(ct.companies)
-      return companies.includes(co.name)
+      return companies.includes(co.id)
     })
     .map((ct) => ({ id: ct.id, name: ct.name, emails: safeJSON(ct.emails) }))
   const allDeals = await db

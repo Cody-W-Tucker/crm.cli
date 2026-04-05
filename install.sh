@@ -3,9 +3,6 @@ set -e
 
 REPO="dzhng/crm.cli"
 INSTALL_DIR="${CRM_INSTALL_DIR:-$HOME/.local/bin}"
-FUSE_DEPS=false
-ONNX_DEPS=false
-MINIMAL=false
 
 usage() {
   cat <<EOF
@@ -16,8 +13,6 @@ Usage:
   curl -fsSL https://raw.githubusercontent.com/$REPO/main/install.sh | sh -s -- [OPTIONS]
 
 Options:
-  --all       Install with all optional dependencies (FUSE + ONNX)
-  --minimal   Binary only (no FUSE, no semantic search)
   --help      Show this help message
 EOF
   exit 0
@@ -26,13 +21,6 @@ EOF
 # Parse arguments
 for arg in "$@"; do
   case "$arg" in
-    --all)
-      FUSE_DEPS=true
-      ONNX_DEPS=true
-      ;;
-    --minimal)
-      MINIMAL=true
-      ;;
     --help|-h)
       usage
       ;;
@@ -99,46 +87,29 @@ case ":$PATH:" in
     ;;
 esac
 
-# Optional FUSE dependencies
-if [ "$FUSE_DEPS" = true ] && [ "$MINIMAL" = false ]; then
-  echo ""
-  echo "Installing FUSE dependencies..."
-  case "$PLATFORM" in
-    linux)
-      if command -v apt-get >/dev/null 2>&1; then
-        sudo apt-get install -y libfuse3-dev libsqlite3-dev
-      elif command -v yum >/dev/null 2>&1; then
-        sudo yum install -y fuse3-devel sqlite-devel
-      elif command -v pacman >/dev/null 2>&1; then
-        sudo pacman -S --noconfirm fuse3 sqlite
-      else
-        echo "Warning: could not detect package manager. Install libfuse3-dev and libsqlite3-dev manually."
-      fi
-      ;;
-    darwin)
-      if command -v brew >/dev/null 2>&1; then
-        brew install macfuse
-      else
-        echo "Warning: Homebrew not found. Install macFUSE from https://osxfuse.github.io/"
-      fi
-      ;;
-  esac
-fi
-
-# Optional ONNX runtime for semantic search
-if [ "$ONNX_DEPS" = true ] && [ "$MINIMAL" = false ]; then
-  echo ""
-  echo "Downloading embedding model for semantic search..."
-  MODEL_DIR="$HOME/.crm/models"
-  mkdir -p "$MODEL_DIR"
-  if [ ! -f "$MODEL_DIR/all-MiniLM-L6-v2.onnx" ]; then
-    curl -fsSL -o "$MODEL_DIR/all-MiniLM-L6-v2.onnx" \
-      "https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model_quantized.onnx" || \
-      echo "Warning: failed to download embedding model. Semantic search (crm find) will use keyword fallback."
-  else
-    echo "Embedding model already present."
-  fi
-fi
+# Install FUSE dependencies
+echo ""
+echo "Installing FUSE dependencies..."
+case "$PLATFORM" in
+  linux)
+    if command -v apt-get >/dev/null 2>&1; then
+      sudo apt-get install -y libfuse3-dev libsqlite3-dev
+    elif command -v yum >/dev/null 2>&1; then
+      sudo yum install -y fuse3-devel sqlite-devel
+    elif command -v pacman >/dev/null 2>&1; then
+      sudo pacman -S --noconfirm fuse3 sqlite
+    else
+      echo "Warning: could not detect package manager. Install libfuse3-dev and libsqlite3-dev manually."
+    fi
+    ;;
+  darwin)
+    if command -v brew >/dev/null 2>&1; then
+      brew install macfuse
+    else
+      echo "Warning: Homebrew not found. Install macFUSE from https://osxfuse.github.io/"
+    fi
+    ;;
+esac
 
 echo ""
 echo "crm.cli installed successfully!"

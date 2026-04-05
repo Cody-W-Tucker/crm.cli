@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS activities (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
   body TEXT NOT NULL DEFAULT '',
-  contact TEXT,
+  contacts TEXT NOT NULL DEFAULT '[]',
   company TEXT,
   deal TEXT,
   custom_fields TEXT NOT NULL DEFAULT '{}',

@@ -47,7 +47,7 @@ export const activities = sqliteTable('activities', {
   id: text('id').primaryKey(),
   type: text('type').notNull(),
   body: text('body').notNull().default(''),
-  contact: text('contact'),
+  contacts: text('contacts').notNull().default('[]'),
   company: text('company'),
   deal: text('deal'),
   custom_fields: text('custom_fields').notNull().default('{}'),

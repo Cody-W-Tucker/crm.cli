@@ -132,7 +132,7 @@ export function registerImportExportCommands(program: Command) {
               db,
               'contact',
               existing.id,
-              buildContactSearch(row),
+              await buildContactSearch(db, row),
             )
             imported++
             continue
@@ -176,7 +176,12 @@ export function registerImportExportCommands(program: Command) {
             .from(schema.contacts)
             .where(eq(schema.contacts.id, id))
           const row = results[0]
-          await upsertSearchIndex(db, 'contact', id, buildContactSearch(row))
+          await upsertSearchIndex(
+            db,
+            'contact',
+            id,
+            await buildContactSearch(db, row),
+          )
           imported++
         } catch (e: unknown) {
           if (opts.skipErrors) {
