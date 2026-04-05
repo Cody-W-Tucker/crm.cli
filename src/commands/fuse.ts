@@ -47,28 +47,64 @@ export function registerFuseCommands(program: Command) {
           )
         }
         ensureDir(join(homedir(), '.crm', 'bin'))
+        const fuseFlags = (() => {
+          // Try pkg-config fuse3 first (Linux, FUSE-T on macOS)
+          const pc3 = spawnSync('pkg-config', ['--cflags', '--libs', 'fuse3'])
+          if (pc3.status === 0 && pc3.stdout) {
+            return pc3.stdout.toString().trim().split(/\s+/)
+          }
+          // macOS: try FUSE-T paths
+          if (process.platform === 'darwin') {
+            const fuseTPaths = [
+              '/usr/local/lib/pkgconfig',
+              '/opt/homebrew/lib/pkgconfig',
+            ]
+            for (const dir of fuseTPaths) {
+              const pc = spawnSync(
+                'pkg-config',
+                ['--cflags', '--libs', 'fuse3'],
+                {
+                  env: { ...process.env, PKG_CONFIG_PATH: dir },
+                },
+              )
+              if (pc.status === 0 && pc.stdout) {
+                return pc.stdout.toString().trim().split(/\s+/)
+              }
+            }
+            // macFUSE fallback (FUSE 2 API, but macFUSE includes a fuse3-compat header)
+            const macfusePaths = [
+              '/usr/local/include/fuse',
+              '/opt/homebrew/include/fuse',
+              '/usr/local/include/osxfuse/fuse',
+            ]
+            for (const inc of macfusePaths) {
+              if (existsSync(join(inc, 'fuse.h'))) {
+                return [
+                  `-I${inc}/..`,
+                  '-L/usr/local/lib',
+                  '-lfuse',
+                  '-lpthread',
+                ]
+              }
+            }
+            die(
+              'Error: FUSE not found on macOS. Install FUSE-T (`brew install fuse-t`) or macFUSE (`brew install macfuse`).',
+            )
+          }
+          return ['-lfuse3', '-lpthread']
+        })()
         const compile = spawnSync(
           'gcc',
-          [
-            '-o',
-            helperPath,
-            srcPath,
-            ...(() => {
-              const pkgConfig = spawnSync('pkg-config', [
-                '--cflags',
-                '--libs',
-                'fuse3',
-              ])
-              return pkgConfig.stdout
-                ? pkgConfig.stdout.toString().trim().split(/\s+/)
-                : ['-lfuse3', '-lpthread']
-            })(),
-          ],
+          ['-o', helperPath, srcPath, ...fuseFlags],
           { stdio: ['pipe', 'pipe', 'pipe'] },
         )
         if (compile.status !== 0) {
+          const hint =
+            process.platform === 'darwin'
+              ? 'Install FUSE-T (`brew install fuse-t`) or macFUSE (`brew install macfuse`).'
+              : 'Install libfuse3-dev (apt) or fuse3-devel (yum).'
           die(
-            `Error: Failed to compile FUSE helper. Ensure libfuse3-dev is installed.\n${compile.stderr?.toString() || ''}`,
+            `Error: Failed to compile FUSE helper. ${hint}\n${compile.stderr?.toString() || ''}`,
           )
         }
       }

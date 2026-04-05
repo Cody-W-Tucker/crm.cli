@@ -1221,7 +1221,7 @@ search_limit = 20               # max results for search/ virtual files
 ### Platform Notes
 
 - **Linux:** Works out of the box (FUSE is in the kernel).
-- **macOS:** Requires [macFUSE](https://osxfuse.github.io/) or [FUSE-T](https://www.fuse-t.org/).
+- **macOS:** Requires [FUSE-T](https://www.fuse-t.org/) (`brew install fuse-t`, recommended) or [macFUSE](https://osxfuse.github.io/) (`brew install --cask macfuse`).
 - **Windows:** Not supported (use WSL).
 - **Containers/sandboxes:** FUSE requires `--privileged` or `--device /dev/fuse`. If unavailable, use the CLI with `--format json` instead.
 

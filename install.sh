@@ -104,9 +104,20 @@ case "$PLATFORM" in
     ;;
   darwin)
     if command -v brew >/dev/null 2>&1; then
-      brew install macfuse
+      # Prefer FUSE-T (native fuse3 support, no kernel extension)
+      if brew list fuse-t >/dev/null 2>&1; then
+        echo "FUSE-T already installed."
+      elif brew list --cask macfuse >/dev/null 2>&1; then
+        echo "macFUSE already installed."
+      else
+        echo "Installing FUSE-T (recommended for macOS)..."
+        brew install fuse-t 2>/dev/null || {
+          echo "FUSE-T not available. Trying macFUSE..."
+          brew install --cask macfuse
+        }
+      fi
     else
-      echo "Warning: Homebrew not found. Install macFUSE from https://osxfuse.github.io/"
+      echo "Warning: Homebrew not found. Install FUSE-T (https://www.fuse-t.org/) or macFUSE (https://osxfuse.github.io/)."
     fi
     ;;
 esac
