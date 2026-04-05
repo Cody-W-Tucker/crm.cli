@@ -15,7 +15,7 @@ export interface CRMConfig {
     search_limit: number
   }
   phone: { default_country?: string; display: string }
-  pipeline: { stages: string[] }
+  pipeline: { stages: string[]; won_stage: string; lost_stage: string }
 }
 
 export const SEARCH_MODEL = 'mxbai-embed-xsmall-v1'
@@ -32,7 +32,11 @@ const DEFAULT_STAGES = [
 function defaultConfig(): CRMConfig {
   return {
     database: { path: join(homedir(), '.crm', 'crm.db') },
-    pipeline: { stages: [...DEFAULT_STAGES] },
+    pipeline: {
+      stages: [...DEFAULT_STAGES],
+      won_stage: 'closed-won',
+      lost_stage: 'closed-lost',
+    },
     defaults: { format: 'table' },
     phone: { display: 'international' },
     hooks: {},
@@ -74,8 +78,17 @@ function mergeConfig(
   if (override.database?.path) {
     result.database = { ...result.database, path: override.database.path }
   }
-  if (override.pipeline?.stages) {
-    result.pipeline = { ...result.pipeline, stages: override.pipeline.stages }
+  if (override.pipeline) {
+    result.pipeline = { ...result.pipeline }
+    if (override.pipeline.stages) {
+      result.pipeline.stages = override.pipeline.stages
+    }
+    if (override.pipeline.won_stage) {
+      result.pipeline.won_stage = override.pipeline.won_stage
+    }
+    if (override.pipeline.lost_stage) {
+      result.pipeline.lost_stage = override.pipeline.lost_stage
+    }
   }
   if (override.defaults?.format) {
     result.defaults = { ...result.defaults, format: override.defaults.format }

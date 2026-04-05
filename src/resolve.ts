@@ -91,23 +91,7 @@ export async function resolveContact(
     }
   }
 
-  // Try as raw social handle (no URL)
-  if (!(ref.includes('.') || ref.includes('/'))) {
-    const handle = ref.startsWith('@') ? ref.slice(1) : ref
-    const all = await db.select().from(schema.contacts)
-    for (const c of all) {
-      if (
-        c.linkedin === handle ||
-        c.x === handle ||
-        c.bluesky === handle ||
-        c.telegram === handle
-      ) {
-        return c
-      }
-    }
-  }
-
-  // Try social handle with dots (like bsky handles)
+  // Try as social handle (raw or with dots like bsky handles)
   {
     const handle = ref.startsWith('@') ? ref.slice(1) : ref
     const all = await db.select().from(schema.contacts)
@@ -257,12 +241,4 @@ export async function resolveCompanyForLink(
   }
 
   return null
-}
-
-export async function resolveContactForLink(
-  db: DB,
-  ref: string,
-  config?: CRMConfig,
-): Promise<Contact | null> {
-  return await resolveContact(db, ref, config)
 }

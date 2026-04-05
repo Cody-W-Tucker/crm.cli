@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 
 import { removeSearchIndex, upsertSearchIndex } from '../db'
 import * as schema from '../drizzle-schema'
+import { applyFilter, parseFilter } from '../filter'
 import { companyToRow, formatOutput, safeJSON } from '../format'
 import { runHook } from '../hooks'
 import {
@@ -105,6 +106,10 @@ export function registerCompanyCommands(program: Command) {
       let rows = (await db.select().from(schema.companies)).map((c) =>
         companyToRow(c, config),
       )
+      if (opts.filter) {
+        const f = parseFilter(opts.filter)
+        rows = rows.filter((c) => applyFilter(c, f))
+      }
       if (opts.tag) {
         rows = rows.filter((c) =>
           (c.tags as string[] | undefined)?.includes(opts.tag),

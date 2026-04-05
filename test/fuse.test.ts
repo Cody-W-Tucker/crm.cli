@@ -716,6 +716,160 @@ describe('fuse: reports', () => {
         readFileSync(join(ctx.mountPoint, 'reports', 'stale.json'), 'utf-8'),
       )
       expect(Array.isArray(data)).toBe(true)
+      const bob = data.find((r: { name?: string }) => r.name === 'Stale Bob')
+      expect(bob).toBeDefined()
+      expect(bob.type).toBe('contact')
+      expect(bob.id).toBeDefined()
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/forecast.json returns open deals with weighted values', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) {
+      return
+    }
+    try {
+      ctx.runOK(
+        'deal',
+        'add',
+        '--title',
+        'Big Opp',
+        '--value',
+        '50000',
+        '--probability',
+        '80',
+      )
+
+      const data = JSON.parse(
+        readFileSync(join(ctx.mountPoint, 'reports', 'forecast.json'), 'utf-8'),
+      )
+      expect(data).toHaveLength(1)
+      expect(data[0].title).toBe('Big Opp')
+      expect(data[0].value).toBe(50_000)
+      expect(data[0].weighted).toBe(40_000)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/conversion.json returns stage conversion data', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) {
+      return
+    }
+    try {
+      const id = ctx
+        .runOK('deal', 'add', '--title', 'Conv Deal', '--stage', 'lead')
+        .trim()
+      ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+
+      const data = JSON.parse(
+        readFileSync(
+          join(ctx.mountPoint, 'reports', 'conversion.json'),
+          'utf-8',
+        ),
+      )
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0]).toHaveProperty('stage')
+      expect(data[0]).toHaveProperty('entered')
+      expect(data[0]).toHaveProperty('advanced')
+      expect(data[0]).toHaveProperty('rate')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/won.json returns closed-won deals', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) {
+      return
+    }
+    try {
+      const id = ctx
+        .runOK(
+          'deal',
+          'add',
+          '--title',
+          'Winner',
+          '--value',
+          '25000',
+          '--stage',
+          'lead',
+        )
+        .trim()
+      ctx.runOK('deal', 'move', id, '--stage', 'closed-won')
+
+      const data = JSON.parse(
+        readFileSync(join(ctx.mountPoint, 'reports', 'won.json'), 'utf-8'),
+      )
+      expect(data).toHaveLength(1)
+      expect(data[0].title).toBe('Winner')
+      expect(data[0].value).toBe(25_000)
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/lost.json returns closed-lost deals with reasons', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) {
+      return
+    }
+    try {
+      const id = ctx
+        .runOK(
+          'deal',
+          'add',
+          '--title',
+          'Loser',
+          '--value',
+          '10000',
+          '--stage',
+          'lead',
+        )
+        .trim()
+      ctx.runOK(
+        'deal',
+        'move',
+        id,
+        '--stage',
+        'closed-lost',
+        '--reason',
+        'Too expensive',
+      )
+
+      const data = JSON.parse(
+        readFileSync(join(ctx.mountPoint, 'reports', 'lost.json'), 'utf-8'),
+      )
+      expect(data).toHaveLength(1)
+      expect(data[0].title).toBe('Loser')
+      expect(data[0].reason).toContain('Too expensive')
+    } finally {
+      unmount(ctx)
+    }
+  })
+
+  test('reports/velocity.json returns timing data per stage', () => {
+    const ctx = createFuseTestContext()
+    if (skipIfNoFuse(ctx)) {
+      return
+    }
+    try {
+      const id = ctx
+        .runOK('deal', 'add', '--title', 'Speed Deal', '--stage', 'lead')
+        .trim()
+      ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+
+      const data = JSON.parse(
+        readFileSync(join(ctx.mountPoint, 'reports', 'velocity.json'), 'utf-8'),
+      )
+      expect(data.length).toBeGreaterThan(0)
+      expect(data[0]).toHaveProperty('stage')
+      expect(data[0]).toHaveProperty('avg_ms')
+      expect(data[0]).toHaveProperty('deals')
+      expect(data[0]).toHaveProperty('avg_display')
     } finally {
       unmount(ctx)
     }

@@ -258,6 +258,137 @@ describe('export-fs', () => {
     expect(reports).toContain('lost.json')
   })
 
+  test('reports/stale.json contains stale contacts', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Stale Bob', '--email', 'bob@co.com')
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'stale.json'), 'utf-8'),
+    )
+    const bob = data.find((r: { name?: string }) => r.name === 'Stale Bob')
+    expect(bob).toBeDefined()
+    expect(bob.type).toBe('contact')
+    expect(bob.id).toBeDefined()
+  })
+
+  test('reports/forecast.json contains open deals with weighted values', () => {
+    const ctx = createTestContext()
+    ctx.runOK(
+      'deal',
+      'add',
+      '--title',
+      'Forecast Deal',
+      '--value',
+      '40000',
+      '--probability',
+      '50',
+    )
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'forecast.json'), 'utf-8'),
+    )
+    expect(data).toHaveLength(1)
+    expect(data[0].title).toBe('Forecast Deal')
+    expect(data[0].value).toBe(40_000)
+    expect(data[0].weighted).toBe(20_000)
+  })
+
+  test('reports/conversion.json has stage conversion rates', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('deal', 'add', '--title', 'Conv', '--stage', 'lead')
+      .trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'conversion.json'), 'utf-8'),
+    )
+    expect(data.length).toBeGreaterThan(0)
+    const lead = data.find((r: { stage: string }) => r.stage === 'lead')
+    expect(lead).toBeDefined()
+    expect(lead.entered).toBeGreaterThanOrEqual(1)
+    expect(lead.advanced).toBeGreaterThanOrEqual(1)
+  })
+
+  test('reports/won.json contains closed-won deals', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK(
+        'deal',
+        'add',
+        '--title',
+        'Won Deal',
+        '--value',
+        '30000',
+        '--stage',
+        'lead',
+      )
+      .trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'closed-won')
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'won.json'), 'utf-8'),
+    )
+    expect(data).toHaveLength(1)
+    expect(data[0].title).toBe('Won Deal')
+    expect(data[0].value).toBe(30_000)
+  })
+
+  test('reports/lost.json contains closed-lost deals with reasons', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK(
+        'deal',
+        'add',
+        '--title',
+        'Lost Deal',
+        '--value',
+        '15000',
+        '--stage',
+        'lead',
+      )
+      .trim()
+    ctx.runOK(
+      'deal',
+      'move',
+      id,
+      '--stage',
+      'closed-lost',
+      '--reason',
+      'Budget cut',
+    )
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'lost.json'), 'utf-8'),
+    )
+    expect(data).toHaveLength(1)
+    expect(data[0].title).toBe('Lost Deal')
+    expect(data[0].reason).toContain('Budget cut')
+  })
+
+  test('reports/velocity.json has timing data per stage', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('deal', 'add', '--title', 'Fast Deal', '--stage', 'lead')
+      .trim()
+    ctx.runOK('deal', 'move', id, '--stage', 'qualified')
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'reports', 'velocity.json'), 'utf-8'),
+    )
+    expect(data.length).toBeGreaterThan(0)
+    expect(data[0]).toHaveProperty('stage')
+    expect(data[0]).toHaveProperty('avg_ms')
+    expect(data[0]).toHaveProperty('deals')
+    expect(data[0]).toHaveProperty('avg_display')
+  })
+
   test('contact file includes linked companies, deals, and recent_activity', () => {
     const ctx = createTestContext()
     const outDir = join(ctx.dir, 'export')

@@ -733,7 +733,7 @@ async function handleRead(
   }
 
   if (p === 'reports/stale.json') {
-    const data = await computeStale(db)
+    const data = await computeStale(db, config)
     return { data: JSON.stringify(data) }
   }
 
@@ -748,7 +748,7 @@ async function handleRead(
   }
 
   if (p === 'reports/forecast.json') {
-    const data = await computeForecast(db)
+    const data = await computeForecast(db, config)
     return { data: JSON.stringify(data) }
   }
 

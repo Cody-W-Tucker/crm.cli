@@ -298,8 +298,14 @@ export async function generateFS(
 
   // Write reports
   writeJSON(join(outDir, 'reports', 'pipeline.json'), pipelineData)
-  writeJSON(join(outDir, 'reports', 'stale.json'), await computeStale(db))
-  writeJSON(join(outDir, 'reports', 'forecast.json'), await computeForecast(db))
+  writeJSON(
+    join(outDir, 'reports', 'stale.json'),
+    await computeStale(db, config),
+  )
+  writeJSON(
+    join(outDir, 'reports', 'forecast.json'),
+    await computeForecast(db, config),
+  )
   writeJSON(
     join(outDir, 'reports', 'conversion.json'),
     await computeConversion(db, config.pipeline.stages),

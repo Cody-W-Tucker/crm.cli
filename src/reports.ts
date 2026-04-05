@@ -20,9 +20,14 @@ export function computePipeline(
 
 export async function computeStale(
   db: DB,
+  config: CRMConfig,
   days = 30,
 ): Promise<Record<string, unknown>[]> {
   const cutoff = new Date(Date.now() - days * 86_400_000).toISOString()
+  const terminal = new Set([
+    config.pipeline.won_stage,
+    config.pipeline.lost_stage,
+  ])
   const results: Record<string, unknown>[] = []
 
   const contacts = await db.select().from(schema.contacts)
@@ -44,7 +49,7 @@ export async function computeStale(
 
   const deals = await db.select().from(schema.deals)
   for (const d of deals) {
-    if (d.stage === 'closed-won' || d.stage === 'closed-lost') {
+    if (terminal.has(d.stage)) {
       continue
     }
     const lastActivity = (
@@ -189,11 +194,13 @@ export async function computeVelocity(db: DB, stages: string[]) {
   })
 }
 
-export async function computeForecast(db: DB) {
+export async function computeForecast(db: DB, config: CRMConfig) {
+  const terminal = new Set([
+    config.pipeline.won_stage,
+    config.pipeline.lost_stage,
+  ])
   const deals = await db.select().from(schema.deals)
-  const open = deals.filter(
-    (d) => d.stage !== 'closed-won' && d.stage !== 'closed-lost',
-  )
+  const open = deals.filter((d) => !terminal.has(d.stage))
   return open.map((d) => ({
     id: d.id,
     title: d.title,
@@ -209,20 +216,21 @@ export async function computeWon(db: DB, config: CRMConfig) {
   const deals = await db
     .select()
     .from(schema.deals)
-    .where(eq(schema.deals.stage, 'closed-won'))
+    .where(eq(schema.deals.stage, config.pipeline.won_stage))
   return deals.map((d) => dealToRow(d, config))
 }
 
 export async function computeLost(db: DB, config: CRMConfig) {
+  const lostStage = config.pipeline.lost_stage
   const deals = await db
     .select()
     .from(schema.deals)
-    .where(eq(schema.deals.stage, 'closed-lost'))
+    .where(eq(schema.deals.stage, lostStage))
   return Promise.all(
     deals.map(async (d) => {
       const row: Record<string, unknown> = dealToRow(d, config)
       const actResults = (await db.all(
-        sql`SELECT body FROM activities WHERE deal = ${d.id} AND type = 'stage-change' AND body LIKE '%closed-lost%'`,
+        sql`SELECT body FROM activities WHERE deal = ${d.id} AND type = 'stage-change' AND body LIKE ${`%${lostStage}%`}`,
       )) as { body: string | null }[]
       const act = actResults[0]
       row.reason =

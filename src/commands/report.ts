@@ -84,9 +84,9 @@ export function registerReportCommands(program: Command) {
     .option('--days <n>', 'Days threshold', '30')
     .option('--type <type>', 'Entity type (contact or deal)')
     .action(async (opts) => {
-      const { db, fmt } = await getCtx()
+      const { db, config, fmt } = await getCtx()
       const days = Number(opts.days)
-      let results = await computeStale(db, days)
+      let results = await computeStale(db, config, days)
       if (opts.type) {
         results = results.filter((r) => r.type === opts.type)
       }
@@ -143,7 +143,7 @@ export function registerReportCommands(program: Command) {
     )
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
-      let data = await computeForecast(db)
+      let data = await computeForecast(db, config)
       if (opts.period) {
         if (opts.period.match(/^\d{4}-\d{2}$/)) {
           data = data.filter((d) => d.expected_close?.startsWith(opts.period))

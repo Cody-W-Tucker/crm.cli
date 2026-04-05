@@ -187,22 +187,6 @@ export function contactToRow(
   }
 }
 
-export function contactToDisplay(
-  c: Contact,
-  config?: CRMConfig,
-): Record<string, unknown> {
-  const row = contactToRow(c, config)
-  const phones: string[] = safeJSON(c.phones)
-  row._display_phones = phones.map((p) =>
-    formatPhone(
-      p,
-      config?.phone?.display || 'international',
-      config?.phone?.default_country,
-    ),
-  )
-  return row
-}
-
 export function companyToRow(
   c: Company,
   _config?: CRMConfig,
