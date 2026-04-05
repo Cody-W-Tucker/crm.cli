@@ -70,6 +70,7 @@ export function registerLogCommand(program: Command) {
       }
 
       if (opts.at) {
+        opts.at = opts.at.trim()
         const d = new Date(opts.at)
         if (Number.isNaN(d.getTime())) {
           die('Error: invalid --at date')

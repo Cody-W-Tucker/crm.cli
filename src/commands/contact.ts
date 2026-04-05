@@ -69,14 +69,14 @@ export function registerContactCommands(program: Command) {
         }
       }
       const linkedin = opts.linkedin
-        ? normalizeSocialHandle('linkedin', opts.linkedin)
+        ? normalizeSocialHandle('linkedin', opts.linkedin.trim())
         : null
-      const x = opts.x ? normalizeSocialHandle('x', opts.x) : null
+      const x = opts.x ? normalizeSocialHandle('x', opts.x.trim()) : null
       const bluesky = opts.bluesky
-        ? normalizeSocialHandle('bluesky', opts.bluesky)
+        ? normalizeSocialHandle('bluesky', opts.bluesky.trim())
         : null
       const telegram = opts.telegram
-        ? normalizeSocialHandle('telegram', opts.telegram)
+        ? normalizeSocialHandle('telegram', opts.telegram.trim())
         : null
       if (linkedin) {
         await checkDupeSocial(db, 'linkedin', linkedin)
@@ -308,19 +308,19 @@ export function registerContactCommands(program: Command) {
         tags = tags.filter((v) => v !== t)
       }
       if (opts.linkedin) {
-        linkedin = normalizeSocialHandle('linkedin', opts.linkedin)
+        linkedin = normalizeSocialHandle('linkedin', opts.linkedin.trim())
         await checkDupeSocial(db, 'linkedin', linkedin, c.id)
       }
       if (opts.x) {
-        x = normalizeSocialHandle('x', opts.x)
+        x = normalizeSocialHandle('x', opts.x.trim())
         await checkDupeSocial(db, 'x', x, c.id)
       }
       if (opts.bluesky) {
-        bluesky = normalizeSocialHandle('bluesky', opts.bluesky)
+        bluesky = normalizeSocialHandle('bluesky', opts.bluesky.trim())
         await checkDupeSocial(db, 'bluesky', bluesky, c.id)
       }
       if (opts.telegram) {
-        telegram = normalizeSocialHandle('telegram', opts.telegram)
+        telegram = normalizeSocialHandle('telegram', opts.telegram.trim())
         await checkDupeSocial(db, 'telegram', telegram, c.id)
       }
       const kvs = parseKV(opts.set)

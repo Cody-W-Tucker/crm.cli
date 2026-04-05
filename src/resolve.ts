@@ -15,9 +15,10 @@ import {
 
 export async function resolveContact(
   db: DB,
-  ref: string,
+  rawRef: string,
   config?: CRMConfig,
 ): Promise<Contact | null> {
+  const ref = rawRef.trim()
   // By ID
   if (ref.startsWith('ct_')) {
     const results = await db
@@ -112,9 +113,10 @@ export async function resolveContact(
 
 export async function resolveCompany(
   db: DB,
-  ref: string,
+  rawRef: string,
   config?: CRMConfig,
 ): Promise<Company | null> {
+  const ref = rawRef.trim()
   // By ID
   if (ref.startsWith('co_')) {
     const results = await db
@@ -170,7 +172,11 @@ export async function resolveCompany(
   return null
 }
 
-export async function resolveDeal(db: DB, ref: string): Promise<Deal | null> {
+export async function resolveDeal(
+  db: DB,
+  rawRef: string,
+): Promise<Deal | null> {
+  const ref = rawRef.trim()
   if (ref.startsWith('dl_')) {
     const results = await db
       .select()
@@ -183,9 +189,10 @@ export async function resolveDeal(db: DB, ref: string): Promise<Deal | null> {
 
 export async function resolveEntity(
   db: DB,
-  ref: string,
+  rawRef: string,
   config?: CRMConfig,
 ): Promise<{ type: string; entity: Contact | Company | Deal } | null> {
+  const ref = rawRef.trim()
   // Try contact first
   const contact = await resolveContact(db, ref, config)
   if (contact) {
@@ -209,9 +216,10 @@ export async function resolveEntity(
 
 export async function resolveCompanyForLink(
   db: DB,
-  ref: string,
+  rawRef: string,
   _config?: CRMConfig,
 ): Promise<Company | null> {
+  const ref = rawRef.trim()
   // Try by ID
   if (ref.startsWith('co_')) {
     const results = await db

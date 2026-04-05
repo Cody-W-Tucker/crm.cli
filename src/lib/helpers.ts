@@ -82,8 +82,8 @@ export function parseKV(arr: string[]): Record<string, unknown> {
   for (const s of arr || []) {
     const i = s.indexOf('=')
     if (i > 0) {
-      const key = s.slice(0, i)
-      const val = s.slice(i + 1)
+      const key = s.slice(0, i).trim()
+      const val = s.slice(i + 1).trim()
       if (key.startsWith('json:')) {
         try {
           r[key.slice(5)] = JSON.parse(val)
@@ -100,9 +100,10 @@ export function parseKV(arr: string[]): Record<string, unknown> {
 
 export async function getOrCreateCompanyId(
   db: DB,
-  ref: string,
+  rawRef: string,
   config: CRMConfig,
 ): Promise<string> {
+  const ref = rawRef.trim()
   const co = await resolveCompanyForLink(db, ref, config)
   if (co) {
     return co.id
@@ -125,9 +126,10 @@ export async function getOrCreateCompanyId(
 
 export async function getOrCreateContactId(
   db: DB,
-  ref: string,
+  rawRef: string,
   config: CRMConfig,
 ): Promise<string> {
+  const ref = rawRef.trim()
   const ct = await resolveContact(db, ref, config)
   if (ct) {
     return ct.id

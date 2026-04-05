@@ -64,6 +64,7 @@ export function registerDealCommands(program: Command) {
         }
       }
       if (opts.expectedClose) {
+        opts.expectedClose = opts.expectedClose.trim()
         const d = new Date(opts.expectedClose)
         if (Number.isNaN(d.getTime())) {
           die('Error: invalid expected-close date')
@@ -271,7 +272,9 @@ export function registerDealCommands(program: Command) {
       }
       const title = opts.title ?? d.title
       const value = opts.value === undefined ? d.value : Number(opts.value)
-      const expectedClose = opts.expectedClose ?? d.expected_close
+      const expectedClose = opts.expectedClose
+        ? opts.expectedClose.trim()
+        : d.expected_close
       const probability =
         opts.probability === undefined
           ? d.probability
@@ -360,6 +363,10 @@ export function registerDealCommands(program: Command) {
     .option('--note <text>', 'Note')
     .action(async (ref, opts) => {
       const { db, config } = await getCtx()
+      opts.stage = opts.stage.trim()
+      if (opts.note) {
+        opts.note = opts.note.trim()
+      }
       const d = await resolveDeal(db, ref)
       if (!d) {
         die(`Error: deal not found: ${ref}`)

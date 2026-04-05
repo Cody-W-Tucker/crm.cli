@@ -19,8 +19,8 @@ export function registerTagCommands(program: Command) {
       if (args.length < 2) {
         die('Error: usage: tag <ref> <tags...>')
       }
-      const ref = args[0]
-      const tags = args.slice(1)
+      const ref = args[0].trim()
+      const tags = args.slice(1).map((t: string) => t.trim())
       const { db, config } = await getCtx()
       const resolved = await resolveEntity(db, ref, config)
       if (!resolved) {
@@ -56,7 +56,9 @@ export function registerTagCommands(program: Command) {
     .description('Remove tags from an entity')
     .argument('<ref>')
     .argument('<tags...>')
-    .action(async (ref: string, tags: string[]) => {
+    .action(async (rawRef: string, rawTags: string[]) => {
+      const ref = rawRef.trim()
+      const tags = rawTags.map((t) => t.trim())
       const { db, config } = await getCtx()
       const resolved = await resolveEntity(db, ref, config)
       if (!resolved) {

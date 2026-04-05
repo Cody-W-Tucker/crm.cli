@@ -20,7 +20,8 @@ export function registerSearchCommands(program: Command) {
     .description('Full-text search')
     .argument('<query>')
     .option('--type <type>')
-    .action(async (query, opts) => {
+    .action(async (rawQuery, opts) => {
+      const query = rawQuery.trim()
       const { db, config, fmt } = await getCtx()
       const results: Record<string, unknown>[] = []
       try {
@@ -95,7 +96,8 @@ export function registerSearchCommands(program: Command) {
     .option('--type <type>')
     .option('--limit <n>')
     .option('--threshold <n>', 'Minimum similarity score 0.0-1.0')
-    .action(async (query, opts) => {
+    .action(async (rawQuery, opts) => {
+      const query = rawQuery.trim()
       const { db, config, fmt } = await getCtx()
       const queryWords = query.toLowerCase().split(/\s+/)
       const allEntities: (FTSRow & { score: number })[] = []

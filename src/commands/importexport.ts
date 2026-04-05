@@ -96,8 +96,10 @@ export function registerImportExportCommands(program: Command) {
               return n || p
             })
             .filter((p) => /^\+\d+$/.test(p))
-          const companies = splitField(rec.company || rec.companies)
-          const tags = splitField(rec.tags)
+          const companies = splitField(rec.company || rec.companies).map((c) =>
+            c.trim(),
+          )
+          const tags = splitField(rec.tags).map((t) => t.trim())
           // Check for existing by email
           let existing: Contact | null = null
           for (const e of emails) {
@@ -155,10 +157,10 @@ export function registerImportExportCommands(program: Command) {
             }
           }
           const social: Record<string, string | null> = {
-            linkedin: rec.linkedin || null,
-            x: rec.x || null,
-            bluesky: rec.bluesky || null,
-            telegram: rec.telegram || null,
+            linkedin: rec.linkedin?.trim() || null,
+            x: rec.x?.trim() || null,
+            bluesky: rec.bluesky?.trim() || null,
+            telegram: rec.telegram?.trim() || null,
           }
           await db.insert(schema.contacts).values({
             id,
@@ -217,6 +219,7 @@ export function registerImportExportCommands(program: Command) {
             }
             die('Error: company missing name')
           }
+          rec.name = rec.name.trim()
           const websites = splitField(rec.website || rec.websites).map((w) => {
             try {
               return normalizeWebsite(w)
@@ -286,7 +289,8 @@ export function registerImportExportCommands(program: Command) {
             }
             die('Error: deal missing title')
           }
-          const stage = rec.stage || config.pipeline.stages[0]
+          rec.title = rec.title.trim()
+          const stage = (rec.stage || config.pipeline.stages[0]).trim()
           const value = rec.value ? Number(rec.value) : null
           const tags = splitField(rec.tags)
           const custom: Record<string, unknown> = {}
