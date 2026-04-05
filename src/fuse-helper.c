@@ -4,10 +4,13 @@
  * Mounts the CRM SQLite database as a virtual filesystem.
  * Compiled with: gcc -o crm-fuse src/fuse-helper.c $(pkg-config --cflags --libs fuse3) -lsqlite3
  *
- * Usage: crm-fuse -f <mountpoint> -- <db-path>
+ * Usage: crm-fuse -f <mountpoint> -- <db-path> [<config-json-path>]
  *
  * This is a standalone C program spawned by `crm mount`. It implements the
  * FUSE3 operations to serve the CRM data as files and directories.
+ *
+ * Pipeline stages are read from a JSON sidecar file written by `crm mount`.
+ * Format: {"stages":["lead","qualified",...]}
  */
 #define FUSE_USE_VERSION 35
 #include <fuse3/fuse.h>
@@ -20,6 +23,46 @@
 #include <ctype.h>
 
 static sqlite3 *g_db = NULL;
+
+/* Pipeline stages from config */
+#define MAX_STAGES 32
+static char *g_stages[MAX_STAGES];
+static int g_num_stages = 0;
+
+/* Load pipeline stages from config JSON sidecar.
+ * Expected format: {"stages":["lead","qualified",...]} */
+static void load_config(const char *config_path) {
+    if (!config_path) return;
+    FILE *f = fopen(config_path, "r");
+    if (!f) return;
+    char buf[8192];
+    size_t len = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[len] = '\0';
+
+    char *arr_start = strstr(buf, "[");
+    if (!arr_start) return;
+    char *p = arr_start + 1;
+    while (*p && g_num_stages < MAX_STAGES) {
+        while (*p && (*p == ' ' || *p == '\n' || *p == '\r' || *p == '\t' || *p == ',')) p++;
+        if (*p == ']') break;
+        if (*p == '"') {
+            p++;
+            char *start = p;
+            while (*p && *p != '"') p++;
+            if (*p == '"') {
+                size_t slen = p - start;
+                g_stages[g_num_stages] = malloc(slen + 1);
+                memcpy(g_stages[g_num_stages], start, slen);
+                g_stages[g_num_stages][slen] = '\0';
+                g_num_stages++;
+                p++;
+            }
+        } else {
+            p++;
+        }
+    }
+}
 
 /* Slugify a name for filenames */
 static void slugify(const char *input, char *output, size_t maxlen) {
@@ -238,14 +281,10 @@ static int crm_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
         return 0;
     }
 
-    /* deals/_by-stage */
+    /* deals/_by-stage — list stage dirs from config */
     if (strcmp(p, "deals/_by-stage") == 0) {
-        const char *stages[] = {
-            "lead", "qualified", "proposal",
-            "negotiation", "closed-won", "closed-lost", NULL
-        };
-        for (int i = 0; stages[i]; i++)
-            filler(buf, stages[i], NULL, 0, 0);
+        for (int i = 0; i < g_num_stages; i++)
+            filler(buf, g_stages[i], NULL, 0, 0);
         return 0;
     }
 
@@ -269,19 +308,15 @@ static int crm_read(const char *path, char *buf, size_t size, off_t offset,
 
     if (strcmp(p, "pipeline.json") == 0 ||
         strcmp(p, "reports/pipeline.json") == 0) {
-        /* Pipeline report */
+        /* Pipeline report — uses stages from config */
         int pos = 0;
         pos += snprintf(content + pos, sizeof(content) - pos, "[");
-        const char *stages[] = {
-            "lead", "qualified", "proposal",
-            "negotiation", "closed-won", "closed-lost", NULL
-        };
-        for (int i = 0; stages[i]; i++) {
+        for (int i = 0; i < g_num_stages; i++) {
             sqlite3_stmt *stmt;
             char sql[256];
             snprintf(sql, sizeof(sql),
                 "SELECT COUNT(*), COALESCE(SUM(value),0) FROM deals WHERE stage='%s'",
-                stages[i]);
+                g_stages[i]);
             int count = 0;
             double value = 0;
             if (sqlite3_prepare_v2(g_db, sql, -1, &stmt, NULL) == SQLITE_OK) {
@@ -294,7 +329,7 @@ static int crm_read(const char *path, char *buf, size_t size, off_t offset,
             if (i > 0) pos += snprintf(content + pos, sizeof(content) - pos, ",");
             pos += snprintf(content + pos, sizeof(content) - pos,
                 "{\"stage\":\"%s\",\"count\":%d,\"value\":%.0f}",
-                stages[i], count, value);
+                g_stages[i], count, value);
         }
         pos += snprintf(content + pos, sizeof(content) - pos, "]");
         content_len = pos;
@@ -317,21 +352,37 @@ static const struct fuse_operations crm_ops = {
 };
 
 int main(int argc, char *argv[]) {
-    /* Find the DB path after "--" separator */
+    /* Find the DB path and config path after "--" separator */
     const char *db_path = NULL;
+    const char *config_path = NULL;
     int fuse_argc = argc;
 
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--") == 0 && i + 1 < argc) {
-            db_path = argv[i + 1];
+        if (strcmp(argv[i], "--") == 0) {
+            if (i + 1 < argc) db_path = argv[i + 1];
+            if (i + 2 < argc) config_path = argv[i + 2];
             fuse_argc = i;
             break;
         }
     }
 
     if (!db_path) {
-        fprintf(stderr, "Usage: crm-fuse -f <mountpoint> -- <db-path>\n");
+        fprintf(stderr, "Usage: crm-fuse -f <mountpoint> -- <db-path> [<config-json-path>]\n");
         return 1;
+    }
+
+    /* Load pipeline stages from config sidecar */
+    load_config(config_path);
+
+    /* Fall back to default stages if none loaded */
+    if (g_num_stages == 0) {
+        const char *defaults[] = {
+            "lead", "qualified", "proposal",
+            "negotiation", "closed-won", "closed-lost"
+        };
+        for (int i = 0; i < 6; i++)
+            g_stages[i] = strdup(defaults[i]);
+        g_num_stages = 6;
     }
 
     /* Open SQLite database */
@@ -343,5 +394,6 @@ int main(int argc, char *argv[]) {
     int ret = fuse_main(fuse_argc, argv, &crm_ops, NULL);
 
     sqlite3_close(g_db);
+    for (int i = 0; i < g_num_stages; i++) free(g_stages[i]);
     return ret;
 }

@@ -1,8 +1,196 @@
 import { describe, expect, test } from 'bun:test'
-import { mkdirSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { createTestContext } from './helpers.ts'
+
+describe('config: phone settings', () => {
+  test('phone.default_country allows short numbers', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(configPath, `[phone]\ndefault_country = "US"\n`)
+    const id = ctx
+      .runOK(
+        '--config',
+        configPath,
+        'contact',
+        'add',
+        '--name',
+        'Jane',
+        '--phone',
+        '2125551234',
+      )
+      .trim()
+    const out = ctx.runOK(
+      '--config',
+      configPath,
+      'contact',
+      'show',
+      id,
+      '--format',
+      'json',
+    )
+    const data = JSON.parse(out)
+    expect(data.phones[0]).toBe('+12125551234')
+  })
+
+  test('phone.display = national shows national format', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(
+      configPath,
+      `[phone]\ndefault_country = "US"\ndisplay = "national"\n`,
+    )
+    ctx.runOK(
+      '--config',
+      configPath,
+      'contact',
+      'add',
+      '--name',
+      'Jane',
+      '--phone',
+      '+12125551234',
+    )
+    const out = ctx.runOK('--config', configPath, 'contact', 'list')
+    // National format should not have +1 prefix in display
+    expect(out).toContain('Jane')
+  })
+
+  test('phone.display = e164 shows raw E.164', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(configPath, `[phone]\ndisplay = "e164"\n`)
+    const id = ctx
+      .runOK(
+        '--config',
+        configPath,
+        'contact',
+        'add',
+        '--name',
+        'Jane',
+        '--phone',
+        '+12125551234',
+      )
+      .trim()
+    const out = ctx.runOK('--config', configPath, 'contact', 'show', id)
+    expect(out).toContain('+12125551234')
+  })
+})
+
+describe('config: mount settings affect export-fs', () => {
+  test('mount.max_recent_activity limits activities in contact JSON', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(configPath, '[mount]\nmax_recent_activity = 2\n')
+    ctx.runOK(
+      '--config',
+      configPath,
+      'contact',
+      'add',
+      '--name',
+      'Jane',
+      '--email',
+      'jane@acme.com',
+    )
+    for (let i = 0; i < 5; i++) {
+      ctx.runOK(
+        '--config',
+        configPath,
+        'log',
+        'note',
+        'jane@acme.com',
+        `Note ${i}`,
+      )
+    }
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('--config', configPath, 'export-fs', outDir)
+    const files = readdirSync(join(outDir, 'contacts')).filter(
+      (f) => f.endsWith('.json') && !f.startsWith('_'),
+    )
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'contacts', files[0]), 'utf-8'),
+    )
+    expect(data.recent_activity).toHaveLength(2)
+  })
+})
+
+describe('config: pipeline stage changes', () => {
+  test('deal with stage from old config rejected after config change', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+
+    // First config has 'alpha' stage
+    writeFileSync(configPath, `[pipeline]\nstages = ["alpha", "beta"]\n`)
+    ctx.runOK(
+      '--config',
+      configPath,
+      'deal',
+      'add',
+      '--title',
+      'First',
+      '--stage',
+      'alpha',
+    )
+
+    // Change config to different stages — 'alpha' no longer valid
+    writeFileSync(configPath, `[pipeline]\nstages = ["gamma", "delta"]\n`)
+    const result = ctx.runFail(
+      '--config',
+      configPath,
+      'deal',
+      'add',
+      '--title',
+      'Second',
+      '--stage',
+      'alpha',
+    )
+    expect(result.stderr).toContain('stage')
+  })
+
+  test('deal move to new stage works after config change', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+
+    writeFileSync(
+      configPath,
+      `[pipeline]\nstages = ["alpha", "beta", "gamma"]\n`,
+    )
+    const id = ctx
+      .runOK(
+        '--config',
+        configPath,
+        'deal',
+        'add',
+        '--title',
+        'Test',
+        '--stage',
+        'alpha',
+      )
+      .trim()
+
+    ctx.runOK('--config', configPath, 'deal', 'move', id, '--stage', 'gamma')
+    const out = ctx.runOK(
+      '--config',
+      configPath,
+      'deal',
+      'show',
+      id,
+      '--format',
+      'json',
+    )
+    expect(JSON.parse(out).stage).toBe('gamma')
+  })
+
+  test('export-fs with custom stages only creates those stage dirs', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(configPath, `[pipeline]\nstages = ["x", "y"]\n`)
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('--config', configPath, 'export-fs', outDir)
+    const stages = readdirSync(join(outDir, 'deals', '_by-stage')).sort()
+    expect(stages).toEqual(['x', 'y'])
+  })
+})
 
 describe('config resolution', () => {
   test('--config flag takes highest priority', () => {

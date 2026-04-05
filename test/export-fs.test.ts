@@ -1,10 +1,63 @@
 import { describe, expect, test } from 'bun:test'
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 import { createTestContext } from './helpers.ts'
 
 describe('export-fs', () => {
+  test('uses custom pipeline stages from config', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(
+      configPath,
+      `[pipeline]\nstages = ["discovery", "demo", "trial", "won", "lost"]\n`,
+    )
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('--config', configPath, 'export-fs', outDir)
+    const stages = readdirSync(join(outDir, 'deals', '_by-stage'))
+    expect(stages).toContain('discovery')
+    expect(stages).toContain('demo')
+    expect(stages).toContain('trial')
+    expect(stages).toContain('won')
+    expect(stages).toContain('lost')
+    expect(stages).not.toContain('lead')
+    expect(stages).not.toContain('qualified')
+  })
+
+  test('pipeline.json reflects custom stages from config', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'crm.toml')
+    writeFileSync(
+      configPath,
+      `[pipeline]\nstages = ["alpha", "beta", "gamma"]\n`,
+    )
+    ctx.runOK(
+      '--config',
+      configPath,
+      'deal',
+      'add',
+      '--title',
+      'A',
+      '--value',
+      '5000',
+      '--stage',
+      'alpha',
+    )
+    const outDir = join(ctx.dir, 'export')
+    ctx.runOK('--config', configPath, 'export-fs', outDir)
+    const data = JSON.parse(
+      readFileSync(join(outDir, 'pipeline.json'), 'utf-8'),
+    )
+    const stageNames = data.map((s: { stage: string }) => s.stage)
+    expect(stageNames).toContain('alpha')
+    expect(stageNames).toContain('beta')
+    expect(stageNames).toContain('gamma')
+    expect(stageNames).not.toContain('lead')
+    const alpha = data.find((s: { stage: string }) => s.stage === 'alpha')
+    expect(alpha.count).toBe(1)
+    expect(alpha.value).toBe(5000)
+  })
+
   test('creates top-level directories', () => {
     const ctx = createTestContext()
     const outDir = join(ctx.dir, 'export')

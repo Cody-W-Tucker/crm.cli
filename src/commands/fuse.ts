@@ -570,8 +570,15 @@ export function registerFuseCommands(program: Command) {
         }
       }
 
+      // Write config sidecar JSON for the FUSE helper
+      const configSidecar = join(homedir(), '.crm', `mount-${slugify(mp)}.json`)
+      writeFileSync(
+        configSidecar,
+        JSON.stringify({ stages: config.pipeline.stages }),
+      )
+
       // Spawn the helper
-      const args = ['-f', mp, '--', config.database.path]
+      const args = ['-f', mp, '--', config.database.path, configSidecar]
       if (opts.readonly || config.mount.readonly) {
         args.unshift('-o', 'ro')
       }
