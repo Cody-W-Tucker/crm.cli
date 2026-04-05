@@ -1109,3 +1109,61 @@ describe('company list --filter', () => {
     expect(data).toHaveLength(1)
   })
 })
+
+describe('company list --reverse', () => {
+  test('reverses listing order', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'Alpha Inc')
+    ctx.runOK('company', 'add', '--name', 'Beta Corp')
+
+    const normal = ctx.runJSON<{ name: string }[]>(
+      'company',
+      'list',
+      '--sort',
+      'name',
+      '--format',
+      'json',
+    )
+    const reversed = ctx.runJSON<{ name: string }[]>(
+      'company',
+      'list',
+      '--sort',
+      'name',
+      '--reverse',
+      '--format',
+      'json',
+    )
+    expect(normal[0].name).toBe('Alpha Inc')
+    expect(reversed[0].name).toBe('Beta Corp')
+  })
+})
+
+describe('company list --offset', () => {
+  test('skips first N results', () => {
+    const ctx = createTestContext()
+    ctx.runOK('company', 'add', '--name', 'A')
+    ctx.runOK('company', 'add', '--name', 'B')
+    ctx.runOK('company', 'add', '--name', 'C')
+
+    const data = ctx.runJSON<unknown[]>(
+      'company',
+      'list',
+      '--sort',
+      'name',
+      '--offset',
+      '2',
+      '--format',
+      'json',
+    )
+    expect(data).toHaveLength(1)
+  })
+})
+
+describe('company rm --force', () => {
+  test('rm without --force fails in non-interactive mode', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('company', 'add', '--name', 'Acme').trim()
+    const result = ctx.runFail('company', 'rm', id)
+    expect(result.stderr).toContain('--force')
+  })
+})

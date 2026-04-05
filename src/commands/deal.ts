@@ -8,6 +8,7 @@ import { runHook } from '../hooks'
 import {
   buildDealSearch,
   collect,
+  confirmOrForce,
   dealDetail,
   die,
   getCtx,
@@ -138,7 +139,9 @@ export function registerDealCommands(program: Command) {
     .option('--max-value <n>')
     .option('--contact <ref>')
     .option('--sort <field>')
+    .option('--reverse', 'Reverse sort order')
     .option('--limit <n>')
+    .option('--offset <n>')
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
       let rows = (await db.select().from(schema.deals)).map((d) =>
@@ -176,6 +179,12 @@ export function registerDealCommands(program: Command) {
           }
           return String(av ?? '').localeCompare(String(bv ?? ''))
         })
+      }
+      if (opts.reverse) {
+        rows.reverse()
+      }
+      if (opts.offset) {
+        rows = rows.slice(Number(opts.offset))
       }
       if (opts.limit) {
         rows = rows.slice(0, Number(opts.limit))
@@ -349,13 +358,14 @@ export function registerDealCommands(program: Command) {
   cmd
     .command('rm')
     .argument('<ref>')
-    .option('--force')
-    .action(async (ref) => {
+    .option('--force', 'Skip confirmation')
+    .action(async (ref, opts) => {
       const { db, config } = await getCtx()
       const d = await resolveDeal(db, ref)
       if (!d) {
         die(`Error: deal not found: ${ref}`)
       }
+      confirmOrForce(opts.force, `deal "${d.title}" (${d.id})`)
       if (
         !runHook(config, 'pre-deal-rm', {
           id: d.id,

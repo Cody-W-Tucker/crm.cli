@@ -55,12 +55,44 @@ export function collect(v: string, prev: string[]) {
   return prev
 }
 
-export function parseKV(arr: string[]): Record<string, string> {
-  const r: Record<string, string> = {}
+export function confirmOrForce(force: boolean | undefined, label: string) {
+  if (force) {
+    return
+  }
+  if (!process.stdin.isTTY) {
+    die(`Error: refusing to delete ${label} without --force (non-interactive)`)
+  }
+  const fs = require('node:fs')
+  process.stdout.write(`Delete ${label}? [y/N] `)
+  const buf = Buffer.alloc(64)
+  const fd = fs.openSync('/dev/tty', 'r')
+  try {
+    const n = fs.readSync(fd, buf, 0, 64, null)
+    const answer = buf.slice(0, n).toString().trim().toLowerCase()
+    if (answer !== 'y' && answer !== 'yes') {
+      die('Aborted')
+    }
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+export function parseKV(arr: string[]): Record<string, unknown> {
+  const r: Record<string, unknown> = {}
   for (const s of arr || []) {
     const i = s.indexOf('=')
     if (i > 0) {
-      r[s.slice(0, i)] = s.slice(i + 1)
+      const key = s.slice(0, i)
+      const val = s.slice(i + 1)
+      if (key.startsWith('json:')) {
+        try {
+          r[key.slice(5)] = JSON.parse(val)
+        } catch {
+          die(`Error: invalid JSON for custom field "${key.slice(5)}"`)
+        }
+      } else {
+        r[key] = val
+      }
     }
   }
   return r
@@ -261,8 +293,11 @@ export async function companyDetail(
   row._display_phones = phones.map((p) =>
     formatPhone(p, config.phone.display, config.phone.default_country),
   )
-  const allContacts = await db.select().from(schema.contacts)
-  row.contacts = allContacts
+  const linkedContacts = await db
+    .select()
+    .from(schema.contacts)
+    .where(sql`${schema.contacts.companies} LIKE ${`%${co.name}%`}`)
+  row.contacts = linkedContacts
     .filter((ct) => {
       const companies: string[] = safeJSON(ct.companies)
       return companies.includes(co.name)

@@ -12,6 +12,7 @@ import {
   checkDupeWebsite,
   collect,
   companyDetail,
+  confirmOrForce,
   die,
   getCtx,
   makeId,
@@ -99,7 +100,9 @@ export function registerCompanyCommands(program: Command) {
     .command('list')
     .option('--tag <tag>')
     .option('--sort <field>')
+    .option('--reverse', 'Reverse sort order')
     .option('--limit <n>')
+    .option('--offset <n>')
     .option('--filter <expr>')
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
@@ -119,6 +122,12 @@ export function registerCompanyCommands(program: Command) {
         rows.sort((a, b) =>
           String(a[opts.sort] ?? '').localeCompare(String(b[opts.sort] ?? '')),
         )
+      }
+      if (opts.reverse) {
+        rows.reverse()
+      }
+      if (opts.offset) {
+        rows = rows.slice(Number(opts.offset))
       }
       if (opts.limit) {
         rows = rows.slice(0, Number(opts.limit))
@@ -247,13 +256,14 @@ export function registerCompanyCommands(program: Command) {
   cmd
     .command('rm')
     .argument('<ref>')
-    .option('--force')
-    .action(async (ref) => {
+    .option('--force', 'Skip confirmation')
+    .action(async (ref, opts) => {
       const { db, config } = await getCtx()
       const co = await resolveCompany(db, ref, config)
       if (!co) {
         die(`Error: company not found: ${ref}`)
       }
+      confirmOrForce(opts.force, `company "${co.name}" (${co.id})`)
       if (!runHook(config, 'pre-company-rm', { id: co.id, name: co.name })) {
         die('Error: pre-company-rm hook rejected deletion')
       }

@@ -861,3 +861,89 @@ describe('deal probability edge cases', () => {
     expect(data.probability).toBe(100)
   })
 })
+
+describe('deal list --reverse', () => {
+  test('reverses listing order', () => {
+    const ctx = createTestContext()
+    ctx.runOK('deal', 'add', '--title', 'Alpha', '--value', '100')
+    ctx.runOK('deal', 'add', '--title', 'Beta', '--value', '200')
+
+    const normal = ctx.runJSON<{ title: string }[]>(
+      'deal',
+      'list',
+      '--sort',
+      'title',
+      '--format',
+      'json',
+    )
+    const reversed = ctx.runJSON<{ title: string }[]>(
+      'deal',
+      'list',
+      '--sort',
+      'title',
+      '--reverse',
+      '--format',
+      'json',
+    )
+    expect(normal[0].title).toBe('Alpha')
+    expect(reversed[0].title).toBe('Beta')
+  })
+})
+
+describe('deal list --offset', () => {
+  test('skips first N results', () => {
+    const ctx = createTestContext()
+    ctx.runOK('deal', 'add', '--title', 'A')
+    ctx.runOK('deal', 'add', '--title', 'B')
+    ctx.runOK('deal', 'add', '--title', 'C')
+
+    const data = ctx.runJSON<unknown[]>(
+      'deal',
+      'list',
+      '--sort',
+      'title',
+      '--offset',
+      '2',
+      '--format',
+      'json',
+    )
+    expect(data).toHaveLength(1)
+  })
+})
+
+describe('deal rm --force', () => {
+  test('rm without --force fails in non-interactive mode', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('deal', 'add', '--title', 'Test').trim()
+    const result = ctx.runFail('deal', 'rm', id)
+    expect(result.stderr).toContain('--force')
+  })
+})
+
+describe('deal move --reason on non-lost stage', () => {
+  test('reason is stored for any stage move, not just closed-lost', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('deal', 'add', '--title', 'D', '--stage', 'lead')
+      .trim()
+    ctx.runOK(
+      'deal',
+      'move',
+      id,
+      '--stage',
+      'qualified',
+      '--reason',
+      'Strong fit',
+    )
+
+    const activities = ctx.runJSON<{ body: string }[]>(
+      'activity',
+      'list',
+      '--deal',
+      id,
+      '--format',
+      'json',
+    )
+    expect(activities.some((a) => a.body.includes('Strong fit'))).toBe(true)
+  })
+})

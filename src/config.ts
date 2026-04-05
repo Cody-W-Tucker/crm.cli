@@ -138,7 +138,7 @@ export function loadConfig(opts: {
       const parsed = parseTOML(raw)
       config = mergeConfig(config, parsed)
     } catch (_e) {
-      // ignore bad config
+      console.error(`Warning: could not parse config file ${configPath}`)
     }
   }
 

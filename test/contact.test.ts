@@ -639,6 +639,45 @@ describe('contact edit', () => {
     expect(ctx.runOK('contact', 'show', id)).not.toContain('github')
   })
 
+  test('json: prefix stores parsed JSON values', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK(
+        'contact',
+        'add',
+        '--name',
+        'Jane',
+        '--set',
+        'json:score=85',
+        '--set',
+        'json:tags=["a","b"]',
+      )
+      .trim()
+
+    const data = ctx.runJSON<{ custom_fields: Record<string, unknown> }>(
+      'contact',
+      'show',
+      id,
+      '--format',
+      'json',
+    )
+    expect(data.custom_fields.score).toBe(85)
+    expect(data.custom_fields.tags).toEqual(['a', 'b'])
+  })
+
+  test('json: prefix with invalid JSON fails', () => {
+    const ctx = createTestContext()
+    const result = ctx.runFail(
+      'contact',
+      'add',
+      '--name',
+      'Jane',
+      '--set',
+      'json:data={bad',
+    )
+    expect(result.stderr).toContain('invalid JSON')
+  })
+
   test('add and remove tags', () => {
     const ctx = createTestContext()
     const id = ctx
@@ -1711,5 +1750,49 @@ describe('contact merge', () => {
     const show = ctx.runOK('contact', 'show', id1)
     expect(show).toContain('Acme Corp')
     expect(show).toContain('Globex')
+  })
+})
+
+describe('contact list --reverse', () => {
+  test('reverses listing order', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Alice')
+    ctx.runOK('contact', 'add', '--name', 'Bob')
+
+    const normal = ctx.runJSON<{ name: string }[]>(
+      'contact',
+      'list',
+      '--sort',
+      'name',
+      '--format',
+      'json',
+    )
+    const reversed = ctx.runJSON<{ name: string }[]>(
+      'contact',
+      'list',
+      '--sort',
+      'name',
+      '--reverse',
+      '--format',
+      'json',
+    )
+    expect(normal[0].name).toBe('Alice')
+    expect(reversed[0].name).toBe('Bob')
+  })
+})
+
+describe('contact rm --force', () => {
+  test('rm without --force fails in non-interactive mode', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane').trim()
+    const result = ctx.runFail('contact', 'rm', id)
+    expect(result.stderr).toContain('--force')
+  })
+
+  test('rm with --force succeeds', () => {
+    const ctx = createTestContext()
+    const id = ctx.runOK('contact', 'add', '--name', 'Jane').trim()
+    ctx.runOK('contact', 'rm', id, '--force')
+    ctx.runFail('contact', 'show', id)
   })
 })

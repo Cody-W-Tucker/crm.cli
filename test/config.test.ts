@@ -688,3 +688,31 @@ describe('config resolution', () => {
     expect(existsSync(customDB)).toBe(true)
   })
 })
+
+describe('config: malformed TOML warning', () => {
+  test('prints warning on bad TOML but still works', () => {
+    const ctx = createTestContext()
+    const configPath = join(ctx.dir, 'bad.toml')
+    writeFileSync(configPath, 'this is not valid toml [[[')
+
+    const result = Bun.spawnSync(
+      [
+        'bun',
+        'run',
+        join(import.meta.dir, '..', 'src', 'cli.ts'),
+        '--config',
+        configPath,
+        'contact',
+        'add',
+        '--name',
+        'Test',
+      ],
+      { cwd: ctx.dir, env: { ...process.env, NO_COLOR: '1' } },
+    )
+    const stderr = result.stderr.toString()
+    expect(stderr).toContain('Warning')
+    expect(stderr).toContain('could not parse config file')
+    // Should still succeed with defaults
+    expect(result.exitCode).toBe(0)
+  })
+})

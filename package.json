@@ -1,6 +1,13 @@
 {
   "name": "crm.cli",
-  "version": "0.0.1",
+  "version": "0.1.0",
+  "description": "Headless CLI-first CRM",
+  "author": "David Zhang",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dzhng/crm.cli.git"
+  },
   "type": "module",
   "bin": {
     "crm": "./src/cli.ts"

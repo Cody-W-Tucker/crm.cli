@@ -12,6 +12,7 @@ import {
   checkDupePhone,
   checkDupeSocial,
   collect,
+  confirmOrForce,
   contactDetail,
   die,
   getCtx,
@@ -145,6 +146,7 @@ export function registerContactCommands(program: Command) {
     .option('--tag <tag>')
     .option('--company <company>')
     .option('--sort <field>')
+    .option('--reverse', 'Reverse sort order')
     .option('--limit <n>')
     .option('--offset <n>')
     .option('--filter <expr>')
@@ -171,6 +173,9 @@ export function registerContactCommands(program: Command) {
         rows.sort((a, b) =>
           String(a[opts.sort] ?? '').localeCompare(String(b[opts.sort] ?? '')),
         )
+      }
+      if (opts.reverse) {
+        rows.reverse()
       }
       if (opts.offset) {
         rows = rows.slice(Number(opts.offset))
@@ -358,13 +363,14 @@ export function registerContactCommands(program: Command) {
   cmd
     .command('rm')
     .argument('<ref>')
-    .option('--force')
-    .action(async (ref) => {
+    .option('--force', 'Skip confirmation')
+    .action(async (ref, opts) => {
       const { db, config } = await getCtx()
       const c = await resolveContact(db, ref, config)
       if (!c) {
         die(`Error: contact not found: ${ref}`)
       }
+      confirmOrForce(opts.force, `contact "${c.name}" (${c.id})`)
       if (!runHook(config, 'pre-contact-rm', { id: c.id, name: c.name })) {
         die('Error: pre-contact-rm hook rejected deletion')
       }
