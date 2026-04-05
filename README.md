@@ -25,7 +25,7 @@ cat ~/crm/contacts/jane-doe.json | jq .name
 crm contact add --name "Jane Doe" \
   --email jane@acme.com \
   --phone "+1-212-555-1234" \
-  --linkedin https://linkedin.com/in/janedoe \
+  --linkedin linkedin.com/in/janedoe \
   --company Acme
 # Phone stored as E.164, LinkedIn URL → handle, company auto-linked
 ```
@@ -50,15 +50,6 @@ bunx crm.cli contact list
 
 # Or install the compiled binary
 curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
-```
-
-Or build from source:
-
-```bash
-git clone https://github.com/dzhng/crm.cli.git
-cd crm.cli
-bun install
-bun link
 ```
 
 ## Storage
@@ -115,13 +106,13 @@ Settings in a closer `crm.toml` override the global config. The `--config` flag 
 
 ### Global Flags
 
-| Flag | Env Var | Description |
-|------|---------|-------------|
-| `--db <path>` | `CRM_DB` | Path to SQLite database |
-| `--format <fmt>` | `CRM_FORMAT` | Output format: `table`, `json`, `csv`, `tsv`, `ids` |
-| `--no-color` | `NO_COLOR` | Disable colored output |
-| `--config <path>` | `CRM_CONFIG` | Path to config file |
-| `--version` | — | Print version |
+| Flag              | Env Var      | Description                                         |
+| ----------------- | ------------ | --------------------------------------------------- |
+| `--db <path>`     | `CRM_DB`     | Path to SQLite database                             |
+| `--format <fmt>`  | `CRM_FORMAT` | Output format: `table`, `json`, `csv`, `tsv`, `ids` |
+| `--no-color`      | `NO_COLOR`   | Disable colored output                              |
+| `--config <path>` | `CRM_CONFIG` | Path to config file                                 |
+| `--version`       | —            | Print version                                       |
 
 ---
 
@@ -138,34 +129,34 @@ crm contact add --name "Jane Doe" --email jane@acme.com --linkedin janedoe --x j
 crm contact add --name "Jane Doe" --linkedin https://linkedin.com/in/janedoe   # URL input also works — handle is extracted
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--name` | yes | Full name |
-| `--email` | no | Email address (repeatable — multiple allowed) |
-| `--phone` | no | Phone number (repeatable — multiple allowed) |
-| `--company` | no | Company name (repeatable — links to existing or creates stub) |
-| `--tag` | no | Tag (repeatable — multiple allowed) |
-| `--linkedin` | no | LinkedIn handle or URL (stored as handle, e.g. `janedoe`) |
-| `--x` | no | X / Twitter handle or URL (stored as handle, e.g. `janedoe`) |
-| `--bluesky` | no | Bluesky handle or URL (stored as handle, e.g. `janedoe.bsky.social`) |
-| `--telegram` | no | Telegram handle or URL (stored as handle, e.g. `janedoe`) |
-| `--set` | no | Custom field as `key=value` (repeatable — multiple allowed) |
+| Flag         | Required | Description                                                          |
+| ------------ | -------- | -------------------------------------------------------------------- |
+| `--name`     | yes      | Full name                                                            |
+| `--email`    | no       | Email address (repeatable — multiple allowed)                        |
+| `--phone`    | no       | Phone number (repeatable — multiple allowed)                         |
+| `--company`  | no       | Company name (repeatable — links to existing or creates stub)        |
+| `--tag`      | no       | Tag (repeatable — multiple allowed)                                  |
+| `--linkedin` | no       | LinkedIn handle or URL (stored as handle, e.g. `janedoe`)            |
+| `--x`        | no       | X / Twitter handle or URL (stored as handle, e.g. `janedoe`)         |
+| `--bluesky`  | no       | Bluesky handle or URL (stored as handle, e.g. `janedoe.bsky.social`) |
+| `--telegram` | no       | Telegram handle or URL (stored as handle, e.g. `janedoe`)            |
+| `--set`      | no       | Custom field as `key=value` (repeatable — multiple allowed)          |
 
 Prints the created contact ID to stdout.
 
 Social handles enforce uniqueness — no two contacts can share the same handle on a given platform. All of these input formats are accepted and normalized to the raw handle:
 
-| Input | Stored as |
-|-------|-----------|
-| `janedoe` | `janedoe` |
-| `@janedoe` | `janedoe` |
-| `https://linkedin.com/in/janedoe` | `janedoe` |
-| `linkedin.com/in/janedoe` | `janedoe` |
-| `www.linkedin.com/in/janedoe` | `janedoe` |
-| `x.com/janedoe` | `janedoe` |
-| `twitter.com/janedoe` | `janedoe` |
+| Input                               | Stored as          |
+| ----------------------------------- | ------------------ |
+| `janedoe`                           | `janedoe`          |
+| `@janedoe`                          | `janedoe`          |
+| `https://linkedin.com/in/janedoe`   | `janedoe`          |
+| `linkedin.com/in/janedoe`           | `janedoe`          |
+| `www.linkedin.com/in/janedoe`       | `janedoe`          |
+| `x.com/janedoe`                     | `janedoe`          |
+| `twitter.com/janedoe`               | `janedoe`          |
 | `bsky.app/profile/user.bsky.social` | `user.bsky.social` |
-| `t.me/janedoe` | `janedoe` |
+| `t.me/janedoe`                      | `janedoe`          |
 
 The same normalization applies to lookups, edits, and duplicate detection — `crm contact show x.com/janedoe` matches a contact stored with handle `janedoe`.
 
@@ -179,15 +170,15 @@ crm contact list --filter "title~=CTO AND source=conference"
 crm contact list --limit 10 --offset 20
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--tag` | Filter by tag (multiple = AND) |
-| `--company` | Filter by company name (matches any linked company) |
-| `--filter` | Filter expression (see Filtering) — works on both core and custom fields |
-| `--sort` | Sort field: `name`, `created`, `updated` |
-| `--reverse` | Reverse sort order |
-| `--limit` | Max results (default: no limit) |
-| `--offset` | Skip N results |
+| Flag        | Description                                                              |
+| ----------- | ------------------------------------------------------------------------ |
+| `--tag`     | Filter by tag (multiple = AND)                                           |
+| `--company` | Filter by company name (matches any linked company)                      |
+| `--filter`  | Filter expression (see Filtering) — works on both core and custom fields |
+| `--sort`    | Sort field: `name`, `created`, `updated`                                 |
+| `--reverse` | Reverse sort order                                                       |
+| `--limit`   | Max results (default: no limit)                                          |
+| `--offset`  | Skip N results                                                           |
 
 #### `crm contact show <id-or-email-or-phone-or-handle>`
 
@@ -212,23 +203,23 @@ crm contact edit ct_01J8Z... --set title=CEO --set source=referral
 crm contact edit jane@acme.com --add-tag vip --rm-tag cold
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--name` | Update name |
-| `--add-email` | Add an email address |
-| `--rm-email` | Remove an email address |
-| `--add-phone` | Add a phone number |
-| `--rm-phone` | Remove a phone number |
-| `--add-company` | Link to a company (creates stub if needed) |
-| `--rm-company` | Unlink from a company |
-| `--linkedin` | Set LinkedIn handle (accepts URL — extracts handle) |
-| `--x` | Set X / Twitter handle (accepts URL — extracts handle) |
-| `--bluesky` | Set Bluesky handle (accepts URL — extracts handle) |
-| `--telegram` | Set Telegram handle (accepts URL — extracts handle) |
-| `--set` | Set custom field `key=value` |
-| `--unset` | Remove custom field |
-| `--add-tag` | Add tag |
-| `--rm-tag` | Remove tag |
+| Flag            | Description                                            |
+| --------------- | ------------------------------------------------------ |
+| `--name`        | Update name                                            |
+| `--add-email`   | Add an email address                                   |
+| `--rm-email`    | Remove an email address                                |
+| `--add-phone`   | Add a phone number                                     |
+| `--rm-phone`    | Remove a phone number                                  |
+| `--add-company` | Link to a company (creates stub if needed)             |
+| `--rm-company`  | Unlink from a company                                  |
+| `--linkedin`    | Set LinkedIn handle (accepts URL — extracts handle)    |
+| `--x`           | Set X / Twitter handle (accepts URL — extracts handle) |
+| `--bluesky`     | Set Bluesky handle (accepts URL — extracts handle)     |
+| `--telegram`    | Set Telegram handle (accepts URL — extracts handle)    |
+| `--set`         | Set custom field `key=value`                           |
+| `--unset`       | Remove custom field                                    |
+| `--add-tag`     | Add tag                                                |
+| `--rm-tag`      | Remove tag                                             |
 
 #### `crm contact rm <id-or-email-or-phone-or-handle>`
 
@@ -260,13 +251,13 @@ crm company add --name "Acme Corp" --website acme.com
 crm company add --name "Acme Corp" --website acme.com/ventures --website acme.co.uk --phone "+1-212-555-1234" --phone "+44-20-7946-0958" --tag enterprise --set industry=SaaS --set size=50-200
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--name` | yes | Company name |
-| `--website` | no | Website URL (repeatable — multiple allowed) |
-| `--phone` | no | Phone number (repeatable — multiple allowed) |
-| `--tag` | no | Tag (repeatable — multiple allowed) |
-| `--set` | no | Custom field `key=value` (repeatable — multiple allowed) |
+| Flag        | Required | Description                                              |
+| ----------- | -------- | -------------------------------------------------------- |
+| `--name`    | yes      | Company name                                             |
+| `--website` | no       | Website URL (repeatable — multiple allowed)              |
+| `--phone`   | no       | Phone number (repeatable — multiple allowed)             |
+| `--tag`     | no       | Tag (repeatable — multiple allowed)                      |
+| `--set`     | no       | Custom field `key=value` (repeatable — multiple allowed) |
 
 #### `crm company list`
 
@@ -276,14 +267,14 @@ crm company list --filter "industry=SaaS" --format json
 crm company list --tag enterprise --sort name
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--tag` | Filter by tag |
-| `--filter` | Filter expression (see Filtering) |
-| `--sort` | Sort field: `name`, `created`, `updated` |
-| `--reverse` | Reverse sort order |
-| `--limit` | Max results |
-| `--offset` | Skip N results |
+| Flag        | Description                              |
+| ----------- | ---------------------------------------- |
+| `--tag`     | Filter by tag                            |
+| `--filter`  | Filter expression (see Filtering)        |
+| `--sort`    | Sort field: `name`, `created`, `updated` |
+| `--reverse` | Reverse sort order                       |
+| `--limit`   | Max results                              |
+| `--offset`  | Skip N results                           |
 
 #### `crm company show <id-or-website-or-phone>`
 
@@ -303,17 +294,17 @@ crm company edit co_01J8Z... --add-website acme.co.uk --add-phone "+44-20-7946-0
 crm company edit acme.com --rm-website old-acme.com --rm-phone "+1-415-555-0000"
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--name` | Update name |
-| `--add-website` | Add a website URL |
-| `--rm-website` | Remove a website URL |
-| `--add-phone` | Add a phone number |
-| `--rm-phone` | Remove a phone number |
-| `--set` | Set custom field `key=value` |
-| `--unset` | Remove custom field |
-| `--add-tag` | Add tag |
-| `--rm-tag` | Remove tag |
+| Flag            | Description                  |
+| --------------- | ---------------------------- |
+| `--name`        | Update name                  |
+| `--add-website` | Add a website URL            |
+| `--rm-website`  | Remove a website URL         |
+| `--add-phone`   | Add a phone number           |
+| `--rm-phone`    | Remove a phone number        |
+| `--set`         | Set custom field `key=value` |
+| `--unset`       | Remove custom field          |
+| `--add-tag`     | Add tag                      |
+| `--rm-tag`      | Remove tag                   |
 
 #### `crm company rm <id-or-website-or-phone>`
 
@@ -340,17 +331,17 @@ crm deal add --title "Acme Enterprise" --value 50000
 crm deal add --title "Acme Enterprise" --value 50000 --stage qualified --contact jane@acme.com --company acme.com --expected-close 2026-06-01 --probability 60 --tag q2
 ```
 
-| Flag | Required | Description |
-|------|----------|-------------|
-| `--title` | yes | Deal name |
-| `--value` | no | Deal value in dollars (integer) |
-| `--stage` | no | Pipeline stage (default: first configured stage) |
-| `--contact` | no | Link contact by ID or email (repeatable — auto-creates if not found) |
-| `--company` | no | Link company by ID or website (auto-creates if not found) |
-| `--expected-close` | no | Expected close date (`YYYY-MM-DD`) |
-| `--probability` | no | Win probability 0-100 |
-| `--tag` | no | Tag (multiple allowed) |
-| `--set` | no | Custom field `key=value` |
+| Flag               | Required | Description                                                          |
+| ------------------ | -------- | -------------------------------------------------------------------- |
+| `--title`          | yes      | Deal name                                                            |
+| `--value`          | no       | Deal value in dollars (integer)                                      |
+| `--stage`          | no       | Pipeline stage (default: first configured stage)                     |
+| `--contact`        | no       | Link contact by ID or email (repeatable — auto-creates if not found) |
+| `--company`        | no       | Link company by ID or website (auto-creates if not found)            |
+| `--expected-close` | no       | Expected close date (`YYYY-MM-DD`)                                   |
+| `--probability`    | no       | Win probability 0-100                                                |
+| `--tag`            | no       | Tag (multiple allowed)                                               |
+| `--set`            | no       | Custom field `key=value`                                             |
 
 #### `crm deal list`
 
@@ -363,19 +354,19 @@ crm deal list --company acme.com
 crm deal list --min-value 10000 --max-value 100000
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--stage` | Filter by stage |
-| `--contact` | Filter by linked contact |
-| `--company` | Filter by linked company |
-| `--min-value` | Minimum deal value |
-| `--max-value` | Maximum deal value |
-| `--tag` | Filter by tag |
-| `--filter` | Filter expression (see Filtering) — works on both core and custom fields |
-| `--sort` | Sort: `title`, `value`, `stage`, `created`, `updated`, `expected-close` |
-| `--reverse` | Reverse sort order |
-| `--limit` | Max results |
-| `--offset` | Skip first N results |
+| Flag          | Description                                                              |
+| ------------- | ------------------------------------------------------------------------ |
+| `--stage`     | Filter by stage                                                          |
+| `--contact`   | Filter by linked contact                                                 |
+| `--company`   | Filter by linked company                                                 |
+| `--min-value` | Minimum deal value                                                       |
+| `--max-value` | Maximum deal value                                                       |
+| `--tag`       | Filter by tag                                                            |
+| `--filter`    | Filter expression (see Filtering) — works on both core and custom fields |
+| `--sort`      | Sort: `title`, `value`, `stage`, `created`, `updated`, `expected-close`  |
+| `--reverse`   | Reverse sort order                                                       |
+| `--limit`     | Max results                                                              |
+| `--offset`    | Skip first N results                                                     |
 
 #### `crm deal show <id>`
 
@@ -385,19 +376,19 @@ Shows full deal details including stage history (timestamps of every stage trans
 
 Same pattern as other entities. `--stage` is NOT used here — use `crm deal move` for stage changes (so transitions are tracked properly).
 
-| Flag | Description |
-|------|-------------|
-| `--title` | Update title |
-| `--value` | Update value |
-| `--add-contact` | Link an additional contact (auto-creates if not found) |
-| `--rm-contact` | Unlink a contact |
-| `--company` | Change linked company |
-| `--expected-close` | Update expected close date |
-| `--probability` | Update win probability |
-| `--set` | Set custom field `key=value` |
-| `--unset` | Remove custom field |
-| `--add-tag` | Add tag |
-| `--rm-tag` | Remove tag |
+| Flag               | Description                                            |
+| ------------------ | ------------------------------------------------------ |
+| `--title`          | Update title                                           |
+| `--value`          | Update value                                           |
+| `--add-contact`    | Link an additional contact (auto-creates if not found) |
+| `--rm-contact`     | Unlink a contact                                       |
+| `--company`        | Change linked company                                  |
+| `--expected-close` | Update expected close date                             |
+| `--probability`    | Update win probability                                 |
+| `--set`            | Set custom field `key=value`                           |
+| `--unset`          | Remove custom field                                    |
+| `--add-tag`        | Add tag                                                |
+| `--rm-tag`         | Remove tag                                             |
 
 #### `crm deal move <id> --stage <stage>`
 
@@ -441,13 +432,13 @@ Pipeline
 
 When linking entities via `--contact` or `--company` flags, crm.cli auto-creates stubs if the referenced entity doesn't exist. This applies consistently across all commands:
 
-| Command | `--contact` | `--company` |
-|---------|-------------|-------------|
-| `crm contact add` | — | auto-creates |
-| `crm contact edit` | — | auto-creates |
-| `crm deal add` | auto-creates | auto-creates |
+| Command                       | `--contact`  | `--company`  |
+| ----------------------------- | ------------ | ------------ |
+| `crm contact add`             | —            | auto-creates |
+| `crm contact edit`            | —            | auto-creates |
+| `crm deal add`                | auto-creates | auto-creates |
 | `crm deal edit --add-contact` | auto-creates | auto-creates |
-| `crm log` | auto-creates | auto-creates |
+| `crm log`                     | auto-creates | auto-creates |
 
 Auto-created contacts use the email local part as the name (e.g. `jane@acme.com` → name `jane`). Auto-created companies use the provided name directly. All stubs can be enriched later with `crm contact edit` or `crm company edit`.
 
@@ -469,18 +460,18 @@ crm log email "Sent proposal PDF" --contact jane@acme.com --deal dl_abc123
 crm log note "General observation"  # standalone, no entity link
 ```
 
-| Argument | Description |
-|----------|-------------|
-| `type` | One of: `note`, `call`, `meeting`, `email` (plus `stage-change` auto-created by `crm deal move`) |
-| `body` | Free-text description |
+| Argument | Description                                                                                      |
+| -------- | ------------------------------------------------------------------------------------------------ |
+| `type`   | One of: `note`, `call`, `meeting`, `email` (plus `stage-change` auto-created by `crm deal move`) |
+| `body`   | Free-text description                                                                            |
 
-| Flag | Description |
-|------|-------------|
+| Flag        | Description                                              |
+| ----------- | -------------------------------------------------------- |
 | `--contact` | Link to contact (repeatable — auto-creates if not found) |
-| `--company` | Link to company (auto-creates if not found) |
-| `--deal` | Link to deal |
-| `--at` | Override timestamp (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`) |
-| `--set` | Custom field `key=value` (e.g. `--set duration=15m`) |
+| `--company` | Link to company (auto-creates if not found)              |
+| `--deal`    | Link to deal                                             |
+| `--at`      | Override timestamp (`YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`)  |
+| `--set`     | Custom field `key=value` (e.g. `--set duration=15m`)     |
 
 #### `crm activity list`
 
@@ -493,17 +484,17 @@ crm activity list --type call --since 2026-01-01
 crm activity list --limit 20
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--contact` | Filter by contact |
-| `--company` | Filter by company |
-| `--deal` | Filter by deal |
-| `--type` | Filter by activity type |
-| `--since` | Activities after date |
-| `--sort` | Sort field: `type`, `created_at` |
-| `--reverse` | Reverse sort order |
-| `--limit` | Max results |
-| `--offset` | Skip first N results |
+| Flag        | Description                      |
+| ----------- | -------------------------------- |
+| `--contact` | Filter by contact                |
+| `--company` | Filter by company                |
+| `--deal`    | Filter by deal                   |
+| `--type`    | Filter by activity type          |
+| `--since`   | Activities after date            |
+| `--sort`    | Sort field: `type`, `created_at` |
+| `--reverse` | Reverse sort order               |
+| `--limit`   | Max results                      |
+| `--offset`  | Skip first N results             |
 
 ---
 
@@ -547,8 +538,8 @@ crm search "acme" --type contact,company
 crm search "enterprise plan" --format json
 ```
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description                                                        |
+| -------- | ------------------------------------------------------------------ |
 | `--type` | Restrict to entity types: `contact`, `company`, `deal`, `activity` |
 
 #### `crm dupes`
@@ -563,16 +554,17 @@ crm dupes --limit 20
 ```
 
 Typical signals:
+
 - similar contact names with different emails
 - similar company names with different websites
 - same contact name + same company name
 - similar social handles across contacts
 
-| Flag | Description |
-|------|-------------|
-| `--type` | Restrict to `contact` or `company` |
-| `--limit` | Max results (default: 50) |
-| `--threshold` | Minimum similarity score 0.0-1.0 |
+| Flag          | Description                        |
+| ------------- | ---------------------------------- |
+| `--type`      | Restrict to `contact` or `company` |
+| `--limit`     | Max results (default: 50)          |
+| `--threshold` | Minimum similarity score 0.0-1.0   |
 
 Output includes both candidate entities plus the reasons they were flagged. Exact duplicates already prevented by uniqueness constraints (email, phone, social handles) should not appear here.
 
@@ -588,10 +580,10 @@ crm find "jane"
 
 Uses SQLite's built-in FTS5 full-text search — no API keys, no network calls, no external dependencies. The search index is automatically maintained as you add/edit entities.
 
-| Flag | Description |
-|------|-------------|
-| `--type` | Restrict to entity types |
-| `--limit` | Max results (default: 10) |
+| Flag          | Description                                        |
+| ------------- | -------------------------------------------------- |
+| `--type`      | Restrict to entity types                           |
+| `--limit`     | Max results (default: 10)                          |
 | `--threshold` | Minimum keyword match score 0.0-1.0 (default: 0.3) |
 
 #### `crm index`
@@ -628,10 +620,10 @@ crm report activity --period 90d --by type    # grouped by activity type
 crm report activity --by contact          # grouped by contact
 ```
 
-| Flag | Description |
-|------|-------------|
-| `--period` | Time window: `7d`, `30d`, `90d`, `1y` |
-| `--by` | Group by: `type`, `contact`, `company`, `deal` |
+| Flag       | Description                                    |
+| ---------- | ---------------------------------------------- |
+| `--period` | Time window: `7d`, `30d`, `90d`, `1y`          |
+| `--by`     | Group by: `type`, `contact`, `company`, `deal` |
 
 #### `crm report stale`
 
@@ -654,6 +646,7 @@ crm report conversion --since 2026-01-01
 ```
 
 Output:
+
 ```
 Stage Conversion Rates
 ──────────────────────────────────────
@@ -712,11 +705,11 @@ CSV files expect headers matching core field names (`name`, `email`, `phone`, `c
 
 JSON files expect an array of objects with the same field names.
 
-| Flag | Description |
-|------|-------------|
-| `--dry-run` | Preview what would be imported without writing |
-| `--skip-errors` | Continue on invalid rows instead of aborting |
-| `--update` | Update existing records (match by email/website) instead of skipping duplicates |
+| Flag            | Description                                                                     |
+| --------------- | ------------------------------------------------------------------------------- |
+| `--dry-run`     | Preview what would be imported without writing                                  |
+| `--skip-errors` | Continue on invalid rows instead of aborting                                    |
+| `--update`      | Update existing records (match by email/website) instead of skipping duplicates |
 
 #### `crm export <entity-type>`
 
@@ -764,6 +757,7 @@ pre-contact-rm = "~/.crm/hooks/confirm-delete.sh"
 Hooks receive the entity data as JSON via stdin. Pre-hooks can abort the operation by exiting non-zero.
 
 Available hooks:
+
 - `pre-*` / `post-*` for: `contact-add`, `contact-edit`, `contact-rm`, `company-add`, `company-edit`, `company-rm`, `deal-add`, `deal-edit`, `deal-rm`, `deal-stage-change`, `activity-add`
 
 ---
@@ -790,12 +784,12 @@ crm company list --filter "industry=SaaS"
 
 Only a small set of fields are hard-coded per entity — everything else lives in `custom_fields`:
 
-| Entity | Hard-coded fields | Everything else → `custom_fields` |
-|--------|-------------------|-----------------------------------|
-| Contact | `name`, `emails[]`, `phones[]`, `companies[]`, `linkedin`, `x`, `bluesky`, `telegram`, `tags[]` | title, source, notes, ... |
-| Company | `name`, `websites[]`, `phones[]`, `tags[]` | industry, size, founded, ... |
-| Deal | `title`, `value`, `stage`, `contacts[]` (multi), `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ... |
-| Activity | `type`, `body`, `contacts[]` (multi), `company`, `deal`, `created_at` | duration, outcome, attendees, ... |
+| Entity   | Hard-coded fields                                                                                     | Everything else → `custom_fields` |
+| -------- | ----------------------------------------------------------------------------------------------------- | --------------------------------- |
+| Contact  | `name`, `emails[]`, `phones[]`, `companies[]`, `linkedin`, `x`, `bluesky`, `telegram`, `tags[]`       | title, source, notes, ...         |
+| Company  | `name`, `websites[]`, `phones[]`, `tags[]`                                                            | industry, size, founded, ...      |
+| Deal     | `title`, `value`, `stage`, `contacts[]` (multi), `company`, `expected_close`, `probability`, `tags[]` | source, channel, priority, ...    |
+| Activity | `type`, `body`, `contacts[]` (multi), `company`, `deal`, `created_at`                                 | duration, outcome, attendees, ... |
 
 Hard-coded fields drive business logic (entity resolution, pipeline math, relationships, reports). Custom fields are metadata — flexible, filterable, but no special behavior.
 
@@ -809,11 +803,11 @@ All phone numbers are normalized to [E.164](https://en.wikipedia.org/wiki/E.164)
 
 **Display:** Configurable via `phone.display` in `crm.toml`:
 
-| Format | Example | Description |
-|--------|---------|-------------|
-| `international` (default) | `+1 212 555 1234` | Human-readable with spaces |
-| `national` | `(212) 555-1234` | Local format (requires `default_country`) |
-| `e164` | `+12125551234` | Raw stored format |
+| Format                    | Example           | Description                               |
+| ------------------------- | ----------------- | ----------------------------------------- |
+| `international` (default) | `+1 212 555 1234` | Human-readable with spaces                |
+| `national`                | `(212) 555-1234`  | Local format (requires `default_country`) |
+| `e164`                    | `+12125551234`    | Raw stored format                         |
 
 **Input:** Any reasonable format is accepted and normalized:
 
@@ -945,13 +939,13 @@ crm company list --filter "industry=SaaS AND size~=50"
 
 Every command that produces output supports `--format`:
 
-| Format | Description |
-|--------|-------------|
+| Format  | Description                          |
+| ------- | ------------------------------------ |
 | `table` | Human-readable ASCII table (default) |
-| `json` | JSON array of objects |
-| `csv` | Comma-separated values with header |
-| `tsv` | Tab-separated values with header |
-| `ids` | One ID per line (for piping) |
+| `json`  | JSON array of objects                |
+| `csv`   | Comma-separated values with header   |
+| `tsv`   | Tab-separated values with header     |
+| `ids`   | One ID per line (for piping)         |
 
 Set a default via `CRM_FORMAT` env var or `defaults.format` in config.
 
@@ -961,12 +955,12 @@ Set a default via `CRM_FORMAT` env var or `defaults.format` in config.
 
 All entities use prefixed ULID-based IDs:
 
-| Entity | Prefix | Example |
-|--------|--------|---------|
-| Contact | `ct_` | `ct_01J8ZVXB3K...` |
-| Company | `co_` | `co_01J8ZVXB3K...` |
-| Deal | `dl_` | `dl_01J8ZVXB3K...` |
-| Activity | `ac_` | `ac_01J8ZVXB3K...` |
+| Entity   | Prefix | Example            |
+| -------- | ------ | ------------------ |
+| Contact  | `ct_`  | `ct_01J8ZVXB3K...` |
+| Company  | `co_`  | `co_01J8ZVXB3K...` |
+| Deal     | `dl_`  | `dl_01J8ZVXB3K...` |
+| Activity | `ac_`  | `ac_01J8ZVXB3K...` |
 
 Commands that accept an entity reference also accept email, phone, or social handle (contacts), or website URL/host or phone (companies) as shortcuts.
 
@@ -1074,9 +1068,7 @@ Each entity file is a self-contained JSON document with linked data inlined:
   "name": "Jane Doe",
   "emails": ["jane@acme.com", "jane.doe@gmail.com"],
   "phones": ["+12125551234"],
-  "companies": [
-    { "id": "co_01J8Z...", "name": "Acme Corp" }
-  ],
+  "companies": [{ "id": "co_01J8Z...", "name": "Acme Corp" }],
   "linkedin": "janedoe",
   "x": "janedoe",
   "bluesky": null,
@@ -1090,7 +1082,12 @@ Each entity file is a self-contained JSON document with linked data inlined:
     { "id": "dl_01J8Z...", "title": "Acme Enterprise", "stage": "qualified", "value": 50000 }
   ],
   "recent_activity": [
-    { "id": "ac_01J8Z...", "type": "note", "note": "Had a great intro call", "created_at": "2026-04-01T10:30:00Z" }
+    {
+      "id": "ac_01J8Z...",
+      "type": "note",
+      "note": "Had a great intro call",
+      "created_at": "2026-04-01T10:30:00Z"
+    }
   ],
   "created_at": "2026-03-15T09:00:00Z",
   "updated_at": "2026-04-01T10:30:00Z"
@@ -1137,13 +1134,13 @@ Writes are **full-document replacements** — the JSON you write becomes the com
 
 **Validation is strict.** Every write is validated before being applied:
 
-| Error | errno | Feedback |
-|-------|-------|----------|
-| Malformed JSON (parse error) | `EINVAL` | `Invalid JSON: Unexpected token...` |
-| Unknown key | `EINVAL` | `Unknown field: "bogus". Valid fields: name, emails, phones, ...` |
-| Missing required field | `EINVAL` | `Missing required field: "name"` |
-| Type mismatch | `EINVAL` | `Invalid type for "emails": expected array, got string` |
-| Write in readonly mode | `EROFS` | `Filesystem mounted read-only` |
+| Error                        | errno    | Feedback                                                          |
+| ---------------------------- | -------- | ----------------------------------------------------------------- |
+| Malformed JSON (parse error) | `EINVAL` | `Invalid JSON: Unexpected token...`                               |
+| Unknown key                  | `EINVAL` | `Unknown field: "bogus". Valid fields: name, emails, phones, ...` |
+| Missing required field       | `EINVAL` | `Missing required field: "name"`                                  |
+| Type mismatch                | `EINVAL` | `Invalid type for "emails": expected array, got string`           |
+| Write in readonly mode       | `EROFS`  | `Filesystem mounted read-only`                                    |
 
 Errors are returned as the write syscall error, so agents get immediate feedback and can self-correct.
 
