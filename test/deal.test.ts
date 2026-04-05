@@ -631,6 +631,28 @@ describe('deal edit', () => {
   })
 })
 
+describe('deal edit outputs ID', () => {
+  test('edit prints deal ID', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('deal', 'add', '--title', 'Out Deal', '--value', '5000')
+      .trim()
+    const editOut = ctx.runOK('deal', 'edit', id, '--value', '9000').trim()
+    expect(editOut).toBe(id)
+  })
+})
+
+describe('deal move outputs ID', () => {
+  test('move prints deal ID', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('deal', 'add', '--title', 'Move Deal', '--stage', 'lead')
+      .trim()
+    const moveOut = ctx.runOK('deal', 'move', id, '--stage', 'qualified').trim()
+    expect(moveOut).toBe(id)
+  })
+})
+
 describe('deal rm', () => {
   test('delete deal', () => {
     const ctx = createTestContext()

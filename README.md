@@ -245,7 +245,7 @@ Prompts for confirmation unless `--force` is passed. Removes the contact and unl
 crm contact merge ct_01J8Z... ct_02K9A...
 ```
 
-Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, companies, tags, custom fields, and activity history are combined. Deals linked to the second contact are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
+Merges two contacts. Keeps the first, absorbs data from the second. Emails, phones, companies, tags, custom fields, and activity history are combined. Deals linked to the second contact are relinked to the first. The first contact's name and social handles take priority. Prints the surviving contact ID.
 
 ---
 
@@ -325,7 +325,7 @@ Prompts for confirmation unless `--force` is passed. Unlinks contacts and deals 
 crm company merge co_01J8Z... co_02K9A...
 ```
 
-Merges two companies. Keeps the first, absorbs data from the second. Websites, phones, tags, and custom fields are combined. All contacts and deals linked to the second company are relinked to the first. Prompts to resolve conflicts (e.g. different names) unless `--keep-first` is passed.
+Merges two companies. Keeps the first, absorbs data from the second. Websites, phones, tags, and custom fields are combined. All contacts and deals linked to the second company are relinked to the first. The first company's name takes priority. Prints the surviving company ID.
 
 ---
 

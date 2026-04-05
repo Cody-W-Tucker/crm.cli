@@ -437,3 +437,41 @@ describe('multi-contact activity', () => {
     expect(coActs).toHaveLength(1)
   })
 })
+
+describe('activity --at validation', () => {
+  test('rejects invalid --at date', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    const result = ctx.runFail(
+      'log',
+      'note',
+      'Test note',
+      '--contact',
+      'jane@acme.com',
+      '--at',
+      'not-a-date',
+    )
+    expect(result.stderr).toContain('invalid')
+  })
+
+  test('accepts valid --at date', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--email', 'jane@acme.com')
+    ctx.runOK(
+      'log',
+      'note',
+      'Backdated note',
+      '--contact',
+      'jane@acme.com',
+      '--at',
+      '2026-01-15',
+    )
+    const activities = ctx.runJSON<Array<{ created_at: string }>>(
+      'activity',
+      'list',
+      '--format',
+      'json',
+    )
+    expect(activities[0].created_at).toBe('2026-01-15')
+  })
+})

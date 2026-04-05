@@ -323,6 +323,7 @@ export function registerDealCommands(program: Command) {
         .where(eq(schema.deals.id, d.id))
       const row = results[0]
       await upsertSearchIndex(db, 'deal', d.id, buildDealSearch(row))
+      console.log(d.id)
       runHook(config, 'post-deal-edit', {
         id: d.id,
         title,
@@ -379,6 +380,7 @@ export function registerDealCommands(program: Command) {
         created_at: n,
       })
       await upsertSearchIndex(db, 'activity', aid, `stage-change ${body}`)
+      console.log(d.id)
       runHook(config, 'post-deal-stage-change', {
         deal: d.id,
         from: oldStage,

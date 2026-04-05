@@ -60,6 +60,12 @@ export function registerLogCommand(program: Command) {
         deal = d.id
       }
 
+      if (opts.at) {
+        const d = new Date(opts.at)
+        if (Number.isNaN(d.getTime())) {
+          die('Error: invalid --at date')
+        }
+      }
       const id = makeId('ac')
       const ts = opts.at || now()
       const custom = parseKV(opts.set)

@@ -290,15 +290,19 @@ export function registerContactCommands(program: Command) {
       }
       if (opts.linkedin) {
         linkedin = normalizeSocialHandle('linkedin', opts.linkedin)
+        await checkDupeSocial(db, 'linkedin', linkedin, c.id)
       }
       if (opts.x) {
         x = normalizeSocialHandle('x', opts.x)
+        await checkDupeSocial(db, 'x', x, c.id)
       }
       if (opts.bluesky) {
         bluesky = normalizeSocialHandle('bluesky', opts.bluesky)
+        await checkDupeSocial(db, 'bluesky', bluesky, c.id)
       }
       if (opts.telegram) {
         telegram = normalizeSocialHandle('telegram', opts.telegram)
+        await checkDupeSocial(db, 'telegram', telegram, c.id)
       }
       const kvs = parseKV(opts.set)
       for (const [k, v] of Object.entries(kvs)) {
@@ -363,6 +367,7 @@ export function registerContactCommands(program: Command) {
         c.id,
         await buildContactSearch(db, row),
       )
+      console.log(c.id)
       runHook(config, 'post-contact-edit', {
         id: c.id,
         name,
@@ -413,7 +418,6 @@ export function registerContactCommands(program: Command) {
     .command('merge')
     .argument('<id1>')
     .argument('<id2>')
-    .option('--keep-first')
     .action(async (id1, id2) => {
       const { db, config } = await getCtx()
       const c1 = await resolveContact(db, id1, config),
@@ -500,5 +504,6 @@ export function registerContactCommands(program: Command) {
         c1.id,
         await buildContactSearch(db, row),
       )
+      console.log(c1.id)
     })
 }

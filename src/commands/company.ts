@@ -243,6 +243,7 @@ export function registerCompanyCommands(program: Command) {
         .where(eq(schema.companies.id, co.id))
       const row = results[0]
       await upsertSearchIndex(db, 'company', co.id, buildCompanySearch(row))
+      console.log(co.id)
       runHook(config, 'post-company-edit', {
         id: co.id,
         name,
@@ -294,7 +295,6 @@ export function registerCompanyCommands(program: Command) {
     .command('merge')
     .argument('<id1>')
     .argument('<id2>')
-    .option('--keep-first')
     .action(async (id1, id2) => {
       const { db, config } = await getCtx()
       const c1 = await resolveCompany(db, id1, config),
@@ -357,5 +357,6 @@ export function registerCompanyCommands(program: Command) {
         .where(eq(schema.companies.id, c1.id))
       const row = results[0]
       await upsertSearchIndex(db, 'company', c1.id, buildCompanySearch(row))
+      console.log(c1.id)
     })
 }

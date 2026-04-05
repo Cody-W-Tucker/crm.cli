@@ -663,7 +663,7 @@ describe('company merge', () => {
       )
       .trim()
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const show = ctx.runOK('company', 'show', id1)
     expect(show).toContain('acme.com')
@@ -697,7 +697,7 @@ describe('company merge', () => {
       )
       .trim()
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const companies = ctx.runJSON<Array<{ phones: string[] }>>(
       'company',
@@ -736,7 +736,7 @@ describe('company merge', () => {
       )
       .trim()
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const contactShow = ctx.runOK('contact', 'show', contact)
     expect(contactShow).toContain('Acme Corp')
@@ -762,7 +762,7 @@ describe('company merge', () => {
       .runOK('deal', 'add', '--title', 'Deal B', '--company', id2)
       .trim()
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const dealShow = ctx.runOK('deal', 'show', deal)
     expect(dealShow).toContain(id1)
@@ -792,7 +792,7 @@ describe('company merge', () => {
       'acme.com/ventures',
     )
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const activities = ctx.runJSON<unknown[]>(
       'activity',
@@ -814,7 +814,7 @@ describe('company merge', () => {
       .runOK('company', 'add', '--name', 'Acme Inc', '--set', 'size=50-200')
       .trim()
 
-    ctx.runOK('company', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('company', 'merge', id1, id2)
 
     const show = ctx.runOK('company', 'show', id1)
     expect(show).toContain('SaaS')

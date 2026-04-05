@@ -1594,6 +1594,33 @@ describe('contact social handles', () => {
     expect(contacts[0].linkedin).toBe('janedoe')
     expect(contacts[0].x).toBe('janedoe_x')
   })
+
+  test('edit rejects duplicate social handle owned by another contact', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--linkedin', 'janedoe')
+    const bobId = ctx
+      .runOK('contact', 'add', '--name', 'Bob', '--linkedin', 'bobsmith')
+      .trim()
+
+    const result = ctx.runFail(
+      'contact',
+      'edit',
+      bobId,
+      '--linkedin',
+      'janedoe',
+    )
+    expect(result.stderr).toContain('duplicate')
+  })
+
+  test('edit allows setting same social handle on own contact', () => {
+    const ctx = createTestContext()
+    const id = ctx
+      .runOK('contact', 'add', '--name', 'Jane', '--linkedin', 'janedoe')
+      .trim()
+
+    // Re-setting the same handle on the same contact should succeed
+    ctx.runOK('contact', 'edit', id, '--linkedin', 'janedoe')
+  })
 })
 
 describe('contact merge', () => {
@@ -1624,7 +1651,7 @@ describe('contact merge', () => {
       )
       .trim()
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const show = ctx.runOK('contact', 'show', id1)
     expect(show).toContain('jane@acme.com')
@@ -1651,7 +1678,7 @@ describe('contact merge', () => {
       )
       .trim()
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const contacts = ctx.runJSON<Array<{ phones: string[] }>>(
       'contact',
@@ -1681,7 +1708,7 @@ describe('contact merge', () => {
       .runOK('deal', 'add', '--title', 'Big Deal', '--contact', id2)
       .trim()
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const dealShow = ctx.runOK('deal', 'show', deal)
     expect(dealShow).toContain(id1)
@@ -1711,7 +1738,7 @@ describe('contact merge', () => {
       'jane.doe@gmail.com',
     )
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const activities = ctx.runJSON<unknown[]>(
       'activity',
@@ -1751,7 +1778,7 @@ describe('contact merge', () => {
       )
       .trim()
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const show = ctx.runOK('contact', 'show', id1)
     expect(show).toContain('CTO')
@@ -1789,7 +1816,7 @@ describe('contact merge', () => {
       )
       .trim()
 
-    ctx.runOK('contact', 'merge', id1, id2, '--keep-first')
+    ctx.runOK('contact', 'merge', id1, id2)
 
     const show = ctx.runOK('contact', 'show', id1)
     expect(show).toContain('Acme Corp')
