@@ -25,17 +25,20 @@ function ensureDir(dir: string): void {
 //
 // The daemon is spawned as: spawn(process.execPath, [...getDaemonArgs(), '__daemon', ...])
 //
-// Compiled binary: process.execPath = "/usr/local/bin/crm"
-//   → spawn("/usr/local/bin/crm", ["__daemon", socket, db, ...])
+// Compiled binary (install.sh): process.execPath = "/usr/local/bin/crm"
+//   → spawn("/usr/local/bin/crm", ["__daemon", ...])
+//
+// npm install -g: process.execPath = "node", argv[1] = ".../dist/cli.js"
+//   → spawn("node", [".../dist/cli.js", "__daemon", ...])
 //
 // Development (bun run src/cli.ts): process.execPath = "bun", argv[1] = "src/cli.ts"
-//   → spawn("bun", ["run", "src/cli.ts", "__daemon", socket, db, ...])
-//   Without this, it would spawn "bun __daemon ..." which fails because
-//   bun doesn't know what __daemon is — it needs the script path.
+//   → spawn("bun", ["run", "src/cli.ts", "__daemon", ...])
+//   bun needs "run" before the script path; node does not.
 function getDaemonArgs(): string[] {
   const script = process.argv[1]
   if (script && /\.[tj]s$/.test(script)) {
-    return ['run', script]
+    const isBun = process.execPath.includes('bun')
+    return isBun ? ['run', script] : [script]
   }
   return []
 }
