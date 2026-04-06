@@ -4,7 +4,7 @@
 
 **A headless, CLI-first CRM for developers who do sales.** Contacts, deals, and pipeline in a single SQLite file — queryable from your terminal, composable with Unix tools, and mountable as a virtual filesystem so any tool that reads files (Claude Code, Codex, grep, jq, vim) has full CRM access without any integration.
 
-No server. No Docker. No accounts. No GUI. Just `bun install -g crm.cli` and go.
+No server. No Docker. No accounts. No GUI. Just `bun install -g @dzhng/crm.cli` and go.
 
 > **Sponsored by [Duet](https://duet.so)** — a cloud agent workspace with persistent AI. Set up crm.cli in your own private cloud computer and run it with Claude Code or Codex — no local setup required. [Try Duet &rarr;](https://duet.so)
 
@@ -45,10 +45,10 @@ crm dupes --threshold 0.5
 
 ```bash
 # Install globally via bun (recommended)
-bun install -g crm.cli
+bun install -g @dzhng/crm.cli
 
 # Or npx without installing
-bunx crm.cli contact list
+bunx @dzhng/crm.cli contact list
 
 # Or install the compiled binary
 curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
@@ -1251,14 +1251,14 @@ search_limit = 20               # max results for search/ virtual files
 
 ```bash
 # Install globally via bun (recommended)
-bun install -g crm.cli
+bun install -g @dzhng/crm.cli
 
 # Or via npm
-npm install -g crm.cli
+npm install -g @dzhng/crm.cli
 
 # Or use without installing
-bunx crm.cli contact list
-npx crm.cli contact list
+bunx @dzhng/crm.cli contact list
+npx @dzhng/crm.cli contact list
 ```
 
 ### Compiled Binary
