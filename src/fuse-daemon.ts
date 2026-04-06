@@ -177,7 +177,7 @@ async function handleRequest(
 
   switch (op) {
     case 'getattr':
-      return await handleGetattr(db, p, stages)
+      return await handleGetattr(db, config, p, stages)
     case 'readdir':
       return await handleReaddir(db, p, stages)
     case 'read':
@@ -193,7 +193,25 @@ async function handleRequest(
 
 // ── getattr ──
 
+// Wrapper that computes the actual file size via handleRead so macOS FUSE-T
+// (NFS-backed) doesn't zero-pad reads to the placeholder st_size.
 async function handleGetattr(
+  db: DB,
+  config: CRMConfig,
+  p: string,
+  stages: string[],
+): Promise<Record<string, unknown>> {
+  const result = await _handleGetattr(db, p, stages)
+  if (result.type === 'file') {
+    const readResult = await handleRead(db, config, p, stages)
+    if ('data' in readResult && typeof readResult.data === 'string') {
+      return { type: 'file', size: Buffer.byteLength(readResult.data, 'utf-8') }
+    }
+  }
+  return result
+}
+
+async function _handleGetattr(
   db: DB,
   p: string,
   stages: string[],

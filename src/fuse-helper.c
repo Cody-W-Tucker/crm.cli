@@ -152,6 +152,16 @@ static int json_is_type(const char *json, const char *type) {
     return match;
 }
 
+static int64_t json_get_int64(const char *json, const char *key, int64_t default_val) {
+    const char *v = json_find_key(json, key);
+    if (!v) return default_val;
+    /* Skip whitespace */
+    while (*v == ' ' || *v == '\t') v++;
+    /* Must start with a digit */
+    if (*v < '0' || *v > '9') return default_val;
+    return (int64_t)strtoll(v, NULL, 10);
+}
+
 static int json_escape(char *buf, size_t maxlen, const char *s) {
     int p = 0;
     p += snprintf(buf + p, maxlen - p, "\"");
@@ -286,7 +296,7 @@ static int crm_getattr(const char *path, struct stat *stbuf,
     } else {
         stbuf->st_mode = S_IFREG | 0644;
         stbuf->st_nlink = 1;
-        stbuf->st_size = 65536;
+        stbuf->st_size = (off_t)json_get_int64(resp, "size", 65536);
     }
 
     free(resp);
@@ -329,7 +339,11 @@ static int crm_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 }
 
 static int crm_open(const char *path, struct fuse_file_info *fi) {
-    (void)path; (void)fi;
+    (void)path;
+    /* Bypass the VFS page cache so every read goes straight to crm_read.
+     * This ensures the kernel never serves stale zero-padded pages when
+     * st_size > actual content length (common with dynamic FUSE files). */
+    fi->direct_io = 1;
     return 0;
 }
 

@@ -198,7 +198,22 @@ export function registerFuseCommands(program: Command) {
       const { config } = await getCtx()
       const mp = mountpoint || config.mount.default_path
 
-      // Kill FUSE helper and daemon processes first (even if already unmounted)
+      // Unmount first — killing the FUSE helper before unmounting leaves a
+      // stale NFS mount on macOS (FUSE-T uses an NFS backend), causing
+      // subsequent umount to block indefinitely.  Use -f (force) on macOS
+      // so the call never hangs even if the FUSE server is already dead.
+      if (process.platform === 'darwin') {
+        spawnSync('umount', ['-f', mp], { stdio: ['pipe', 'pipe', 'pipe'] })
+      } else {
+        const result = spawnSync('fusermount', ['-u', mp], {
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+        if (result.status !== 0) {
+          spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
+        }
+      }
+
+      // Kill FUSE helper and daemon processes after unmounting
       const pidFile = join(homedir(), '.crm', `mount-${slugify(mp)}.pid`)
       if (existsSync(pidFile)) {
         const pids = readFileSync(pidFile, 'utf-8').trim().split('\n')
@@ -210,18 +225,6 @@ export function registerFuseCommands(program: Command) {
           }
         }
         unlinkSync(pidFile)
-      }
-
-      // Unmount — on macOS use umount directly (fusermount is Linux-only)
-      if (process.platform === 'darwin') {
-        spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
-      } else {
-        const result = spawnSync('fusermount', ['-u', mp], {
-          stdio: ['pipe', 'pipe', 'pipe'],
-        })
-        if (result.status !== 0) {
-          spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
-        }
       }
 
       console.log(`Unmounted ${mp}`)
