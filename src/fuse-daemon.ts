@@ -1554,18 +1554,17 @@ async function handleUnlink(
 
 // ── Main: start Unix socket server ──
 
-async function main() {
-  const args = process.argv.slice(2)
-  if (args.length < 2) {
+export async function startDaemon(daemonArgs: string[]) {
+  if (daemonArgs.length < 2) {
     console.error(
-      'Usage: bun run fuse-daemon.ts <socket-path> <db-path> [stage1 stage2 ...]',
+      'Usage: crm __daemon <socket-path> <db-path> [stage1 stage2 ...]',
     )
     process.exit(1)
   }
 
-  const socketPath = args[0]
-  const dbPath = args[1]
-  const stages = args.slice(2)
+  const socketPath = daemonArgs[0]
+  const dbPath = daemonArgs[1]
+  const stages = daemonArgs.slice(2)
 
   if (stages.length === 0) {
     stages.push(
@@ -1650,7 +1649,10 @@ async function processLine(
   }
 }
 
-main().catch((err) => {
-  console.error('fuse-daemon fatal:', err)
-  process.exit(1)
-})
+// Allow direct invocation for development: bun run fuse-daemon.ts <args>
+if (process.argv[1]?.endsWith('fuse-daemon.ts')) {
+  startDaemon(process.argv.slice(2)).catch((err) => {
+    console.error('fuse-daemon fatal:', err)
+    process.exit(1)
+  })
+}

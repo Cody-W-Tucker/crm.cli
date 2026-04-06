@@ -21,6 +21,18 @@ function ensureDir(dir: string): void {
   }
 }
 
+// When running via `bun run src/cli.ts`, process.execPath is `bun` and we need
+// to pass the script path. When running a compiled binary, process.execPath is
+// the binary itself and no extra args are needed.
+function getDaemonArgs(): string[] {
+  const script = process.argv[1]
+  // If argv[1] is a .ts/.js file, we're running via a runtime (bun/node)
+  if (script && /\.[tj]s$/.test(script)) {
+    return ['run', script]
+  }
+  return []
+}
+
 // ── macOS NFS mount (no FUSE dependency) ──
 
 async function mountDarwin(
@@ -70,15 +82,14 @@ async function mountDarwin(
     ])
   }
 
-  // Start the TS daemon (same as before — handles all business logic)
+  // Start the daemon (runs as `crm __daemon` — works with both bun and compiled binary)
   const socketPath = join(tmpdir(), `crm-fuse-${slugify(mp)}.sock`)
-  const daemonPath = join(import.meta.dir, '..', 'fuse-daemon.ts')
 
   const daemonProc = spawn(
-    'bun',
+    process.execPath,
     [
-      'run',
-      daemonPath,
+      ...getDaemonArgs(),
+      '__daemon',
       socketPath,
       config.database.path,
       ...config.pipeline.stages,
@@ -235,15 +246,14 @@ async function mountLinux(
     }
   }
 
-  // Start the TS daemon
+  // Start the daemon (runs as `crm __daemon` — works with both bun and compiled binary)
   const socketPath = join(tmpdir(), `crm-fuse-${slugify(mp)}.sock`)
-  const daemonPath = join(import.meta.dir, '..', 'fuse-daemon.ts')
 
   const daemonProc = spawn(
-    'bun',
+    process.execPath,
     [
-      'run',
-      daemonPath,
+      ...getDaemonArgs(),
+      '__daemon',
       socketPath,
       config.database.path,
       ...config.pipeline.stages,
