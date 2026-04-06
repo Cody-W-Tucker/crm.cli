@@ -198,33 +198,74 @@ export function registerFuseCommands(program: Command) {
       const { config } = await getCtx()
       const mp = mountpoint || config.mount.default_path
 
-      // Unmount first — killing the FUSE helper before unmounting leaves a
-      // stale NFS mount on macOS (FUSE-T uses an NFS backend), causing
-      // subsequent umount to block indefinitely.  Use -f (force) on macOS
-      // so the call never hangs even if the FUSE server is already dead.
+      const pidFile = join(homedir(), '.crm', `mount-${slugify(mp)}.pid`)
+
       if (process.platform === 'darwin') {
-        spawnSync('umount', ['-f', mp], { stdio: ['pipe', 'pipe', 'pipe'] })
+        // FUSE-T uses a local NFS v4 server.  We must kill the FUSE helper
+        // (the NFS server) and wait for it to fully exit BEFORE calling umount.
+        //
+        // Why: umount on a live NFS server hangs (server alive but slow);
+        // umount -f while the server is alive panics the macOS 26 NFS client.
+        // Once the server process is dead the TCP connection drops, the kernel
+        // NFS client marks the mount stale, and plain umount returns immediately.
+        if (existsSync(pidFile)) {
+          const lines = readFileSync(pidFile, 'utf-8').trim().split('\n')
+          const fuseHelperPid = Number(lines[0])
+          const daemonPid = lines[1] ? Number(lines[1]) : null
+
+          // Terminate FUSE helper and wait up to 3 s for it to exit
+          try {
+            process.kill(fuseHelperPid, 'SIGTERM')
+          } catch {
+            // already dead
+          }
+          const deadline = Date.now() + 3000
+          while (Date.now() < deadline) {
+            try {
+              process.kill(fuseHelperPid, 0) // throws if process is gone
+              await new Promise((r) => setTimeout(r, 50))
+            } catch {
+              break // process exited
+            }
+          }
+          // Force-kill if still alive after grace period
+          try {
+            process.kill(fuseHelperPid, 'SIGKILL')
+          } catch {
+            // already dead
+          }
+
+          if (daemonPid) {
+            try {
+              process.kill(daemonPid)
+            } catch {
+              // already dead
+            }
+          }
+          unlinkSync(pidFile)
+        }
+
+        // NFS server is now dead — plain umount returns immediately
+        spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
       } else {
+        // Linux: kill processes then fusermount/umount
+        if (existsSync(pidFile)) {
+          const pids = readFileSync(pidFile, 'utf-8').trim().split('\n')
+          for (const pid of pids) {
+            try {
+              process.kill(Number(pid))
+            } catch {
+              // already dead
+            }
+          }
+          unlinkSync(pidFile)
+        }
         const result = spawnSync('fusermount', ['-u', mp], {
           stdio: ['pipe', 'pipe', 'pipe'],
         })
         if (result.status !== 0) {
           spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
         }
-      }
-
-      // Kill FUSE helper and daemon processes after unmounting
-      const pidFile = join(homedir(), '.crm', `mount-${slugify(mp)}.pid`)
-      if (existsSync(pidFile)) {
-        const pids = readFileSync(pidFile, 'utf-8').trim().split('\n')
-        for (const pid of pids) {
-          try {
-            process.kill(Number(pid))
-          } catch {
-            // already dead
-          }
-        }
-        unlinkSync(pidFile)
       }
 
       console.log(`Unmounted ${mp}`)
