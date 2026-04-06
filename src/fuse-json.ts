@@ -6,6 +6,81 @@ import type { Activity, Company, Contact, Deal } from './drizzle-schema'
 import * as schema from './drizzle-schema'
 import { safeJSON } from './format'
 
+export const LLM_TXT = `# CRM Filesystem
+
+This directory is a live view of a CRM database, powered by crm.cli.
+All data is JSON. Changes made here are written back to the database.
+
+## Structure
+
+contacts/                    → One JSON file per contact
+  _by-email/                 → Lookup by email address
+  _by-phone/                 → Lookup by E.164 phone (+12125551234.json)
+  _by-linkedin/              → Lookup by LinkedIn handle
+  _by-x/                     → Lookup by X/Twitter handle
+  _by-bluesky/               → Lookup by Bluesky handle
+  _by-telegram/              → Lookup by Telegram handle
+  _by-company/               → Contacts grouped by company name
+  _by-tag/                   → Contacts grouped by tag
+
+companies/                   → One JSON file per company
+  _by-website/               → Lookup by website domain
+  _by-phone/                 → Lookup by E.164 phone
+  _by-tag/                   → Companies grouped by tag
+
+deals/                       → One JSON file per deal
+  _by-stage/                 → Deals grouped by pipeline stage
+  _by-company/               → Deals grouped by company name
+  _by-tag/                   → Deals grouped by tag
+
+activities/                  → One JSON file per activity (note, email, call, meeting)
+  _by-contact/               → Activities grouped by contact
+  _by-company/               → Activities grouped by company
+  _by-deal/                  → Activities grouped by deal
+  _by-type/                  → Activities grouped by type
+
+reports/                     → Pre-computed analytics (pipeline, forecast, velocity, stale, won, lost, conversion)
+search/                      → Write a query file, read back JSON results
+pipeline.json                → Pipeline stage counts and values
+tags.json                    → All tags with usage counts
+
+## Reading data
+
+Each entity file (e.g. contacts/ct_01J8Z...jane-doe.json) is self-contained JSON
+with all fields, linked entities, and recent activity. The _by-* directories contain
+copies of the same files, organized for lookup. Use ls + cat to explore.
+
+## Writing data
+
+Write a JSON file to a top-level directory to create or update an entity:
+
+  echo '{"name":"Jane Doe","emails":["jane@acme.com"]}' > contacts/new.json
+
+The filename doesn't matter for writes — the CRM assigns an ID and renames the file.
+To update, write to the existing filename. Fields you omit are left unchanged.
+
+## Search
+
+Write a query to search/query.txt and read search/results.json:
+
+  echo "fintech CTO London" > search/query.txt
+  cat search/results.json
+
+## Phones
+
+Phones are stored in E.164 format (+12125551234). The _by-phone directories use E.164
+filenames. When writing, any common format is accepted and normalized automatically.
+
+## Tips for agents
+
+- Start with \`ls\` at the root to see what's available
+- Use _by-email, _by-phone, _by-linkedin for fast lookups instead of scanning all files
+- Read pipeline.json for a quick overview of deal flow
+- Read reports/ for pre-computed analytics — no need to calculate from raw data
+- All JSON files are self-contained — no need to join across files
+- The search/ directory accepts natural language queries
+`
+
 export function slugify(name: string): string {
   return (name || 'unknown')
     .toLowerCase()

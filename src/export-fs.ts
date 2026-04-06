@@ -16,6 +16,7 @@ import {
   companyFilename,
   contactFilename,
   dealFilename,
+  LLM_TXT,
   slugify,
 } from './fuse-json'
 import {
@@ -74,6 +75,9 @@ export async function generateFS(
 
   ensureDir(join(outDir, 'reports'))
   ensureDir(join(outDir, 'search'))
+
+  // Write llm.txt — agent instructions for navigating the CRM filesystem
+  writeFileSync(join(outDir, 'llm.txt'), LLM_TXT)
 
   // Pre-fetch companies for ID→name resolution
   const companies = await db.select().from(schema.companies)

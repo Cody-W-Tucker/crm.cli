@@ -27,6 +27,7 @@ import {
   buildCompanyJSON,
   buildContactJSON,
   buildDealJSON,
+  LLM_TXT,
   slugify,
 } from './fuse-json'
 import { getOrCreateCompanyId } from './lib/helpers'
@@ -491,6 +492,7 @@ async function handleReaddir(
   if (p === '') {
     return {
       entries: [
+        'llm.txt',
         'contacts',
         'companies',
         'deals',
@@ -721,6 +723,11 @@ async function handleRead(
   p: string,
   stages: string[],
 ): Promise<Record<string, unknown>> {
+  // llm.txt — agent instructions
+  if (p === 'llm.txt') {
+    return { data: LLM_TXT }
+  }
+
   // pipeline.json (top-level)
   if (p === 'pipeline.json' || p === 'reports/pipeline.json') {
     const deals = await db.select().from(schema.deals)
