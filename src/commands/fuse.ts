@@ -247,6 +247,11 @@ export function registerFuseCommands(program: Command) {
 
         // NFS server is now dead — plain umount returns immediately
         spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
+
+        // Brief settle time — the kernel may still be tearing down NFS client
+        // state after umount returns.  Without this, a subsequent mount can
+        // race with the in-flight cleanup and panic the NFS subsystem.
+        await new Promise((r) => setTimeout(r, 200))
       } else {
         // Linux: kill processes then fusermount/umount
         if (existsSync(pidFile)) {
