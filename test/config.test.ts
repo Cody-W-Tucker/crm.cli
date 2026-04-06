@@ -663,7 +663,7 @@ describe('config resolution', () => {
   })
 
   test('config sets custom database path', () => {
-    const ctx = createTestContext()
+    const ctx = createTestContext({ noConfig: true })
     const customDB = join(ctx.dir, 'from-config.db')
     writeFileSync(
       join(ctx.dir, 'crm.toml'),
@@ -723,6 +723,8 @@ describe('config: malformed TOML warning', () => {
         join(import.meta.dir, '..', 'src', 'cli.ts'),
         '--config',
         configPath,
+        '--db',
+        ctx.dbPath,
         'contact',
         'add',
         '--name',
