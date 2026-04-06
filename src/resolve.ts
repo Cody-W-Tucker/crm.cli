@@ -217,7 +217,6 @@ export async function resolveEntity(
 export async function resolveCompanyForLink(
   db: DB,
   rawRef: string,
-  _config?: CRMConfig,
 ): Promise<Company | null> {
   const ref = rawRef.trim()
   // Try by ID

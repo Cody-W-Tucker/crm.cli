@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { execSync } from 'node:child_process'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 
@@ -111,6 +112,56 @@ function mergeConfig(
   return result
 }
 
+/** Detect the user's country code from system locale (e.g. "en_US" → "US") */
+function detectCountry(): string | undefined {
+  try {
+    // macOS: AppleLocale gives e.g. "en_US"
+    if (process.platform === 'darwin') {
+      const locale = execSync('defaults read NSGlobalDomain AppleLocale', {
+        stdio: ['pipe', 'pipe', 'pipe'],
+      })
+        .toString()
+        .trim()
+      const match = locale.match(/_([A-Z]{2})/)
+      if (match) {
+        return match[1]
+      }
+    }
+    // Linux/other: LANG or LC_ALL (e.g. "en_US.UTF-8" → "US")
+    const lang = process.env.LC_ALL || process.env.LANG || ''
+    const match = lang.match(/_([A-Z]{2})/)
+    if (match) {
+      return match[1]
+    }
+  } catch {
+    // detection failed
+  }
+  return undefined
+}
+
+function createDefaultConfig(configPath: string): void {
+  const country = detectCountry() || 'US'
+  const content = `# CRM CLI configuration
+# Docs: https://github.com/dzhng/crm.cli#configuration
+
+[phone]
+default_country = "${country}"
+display = "national"
+
+[pipeline]
+stages = ["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"]
+won_stage = "closed-won"
+lost_stage = "closed-lost"
+`
+  mkdirSync(dirname(configPath), { recursive: true })
+  writeFileSync(configPath, content)
+  console.log(`Created default config at ${configPath}`)
+  console.log(
+    `  phone.default_country = "${country}" (detected from system locale)`,
+  )
+  console.log('  Edit this file to customize.\n')
+}
+
 export function loadConfig(opts: {
   configPath?: string
   dbPath?: string
@@ -126,20 +177,23 @@ export function loadConfig(opts: {
     config.phone.display = process.env.CRM_PHONE_DISPLAY
   }
 
-  // Resolve config file
-  let configPath = opts.configPath || process.env.CRM_CONFIG || null
-  if (!configPath) {
-    configPath = findConfigFile(process.cwd())
-  }
+  // Resolve config file — auto-create with sensible defaults on first run
+  const configPath =
+    opts.configPath ||
+    process.env.CRM_CONFIG ||
+    findConfigFile(process.cwd()) ||
+    (() => {
+      const p = join(homedir(), '.crm', 'config.toml')
+      createDefaultConfig(p)
+      return p
+    })()
 
-  if (configPath && existsSync(configPath)) {
-    try {
-      const raw = readFileSync(configPath, 'utf-8')
-      const parsed = parseTOML(raw)
-      config = mergeConfig(config, parsed)
-    } catch (_e) {
-      console.error(`Warning: could not parse config file ${configPath}`)
-    }
+  try {
+    const raw = readFileSync(configPath, 'utf-8')
+    const parsed = parseTOML(raw)
+    config = mergeConfig(config, parsed)
+  } catch (_e) {
+    console.error(`Warning: could not parse config file ${configPath}`)
   }
 
   // DB path resolution: --db flag > CRM_DB env > config file > default (~/.crm/crm.db)

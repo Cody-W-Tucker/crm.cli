@@ -58,7 +58,7 @@ export function registerLogCommand(program: Command) {
       }
 
       if (opts.company) {
-        company = await getOrCreateCompanyId(db, opts.company, config)
+        company = await getOrCreateCompanyId(db, opts.company)
       }
 
       if (opts.deal) {

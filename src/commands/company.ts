@@ -111,7 +111,7 @@ export function registerCompanyCommands(program: Command) {
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
       let rows = (await db.select().from(schema.companies)).map((c) =>
-        companyToRow(c, config),
+        companyToRow(c),
       )
       if (opts.filter) {
         const f = parseFilter(opts.filter)

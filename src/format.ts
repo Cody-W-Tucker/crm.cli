@@ -83,7 +83,7 @@ function formatTSV(data: Record<string, unknown>[]): string {
 
 function formatTable(
   data: Record<string, unknown> | Record<string, unknown>[],
-  _config?: CRMConfig,
+  config?: CRMConfig,
 ): string {
   if (!data || (Array.isArray(data) && data.length === 0)) {
     return ''
@@ -91,36 +91,81 @@ function formatTable(
   if (!Array.isArray(data)) {
     return formatEntityDetail(data)
   }
-  const keys = Object.keys(data[0])
+  // Only show columns that have at least one non-empty value
+  const keys = Object.keys(data[0]).filter((k) =>
+    data.some((row) => {
+      const v = row[k]
+      if (v === null || v === undefined || v === '') {
+        return false
+      }
+      if (Array.isArray(v) && v.length === 0) {
+        return false
+      }
+      if (
+        typeof v === 'object' &&
+        !Array.isArray(v) &&
+        Object.keys(v as object).length === 0
+      ) {
+        return false
+      }
+      return true
+    }),
+  )
+  if (keys.length === 0) {
+    return ''
+  }
+
   const widths: Record<string, number> = {}
   for (const k of keys) {
     widths[k] = k.length
   }
   for (const row of data) {
     for (const k of keys) {
-      const v = displayValue(row[k])
+      const v = displayValue(row[k], config)
       widths[k] = Math.max(widths[k], v.length)
     }
   }
   const header = keys.map((k) => k.padEnd(widths[k])).join('  ')
   const separator = keys.map((k) => '─'.repeat(widths[k])).join('──')
   const rows = data.map((row) =>
-    keys.map((k) => displayValue(row[k]).padEnd(widths[k])).join('  '),
+    keys.map((k) => displayValue(row[k], config).padEnd(widths[k])).join('  '),
   )
   return [header, separator, ...rows].join('\n')
 }
 
-function displayValue(v: unknown): string {
+function displayValue(v: unknown, config?: CRMConfig): string {
   if (v === null || v === undefined) {
     return ''
   }
   if (Array.isArray(v)) {
-    return v.join(', ')
+    return v.map((item) => displayValue(item, config)).join(', ')
   }
   if (typeof v === 'object') {
     return JSON.stringify(v)
   }
-  return String(v)
+  const s = String(v)
+  // Format E.164 phone numbers for display
+  if (/^\+\d{7,15}$/.test(s)) {
+    return formatPhone(
+      s,
+      config?.phone?.display || 'international',
+      config?.phone?.default_country,
+    )
+  }
+  // Format ISO timestamps as readable local time
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) {
+    const d = new Date(s)
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      })
+    }
+  }
+  return s
 }
 
 function formatEntityDetail(entity: Record<string, unknown>): string {
@@ -153,28 +198,17 @@ function formatEntityDetail(entity: Record<string, unknown>): string {
   return lines.join('\n')
 }
 
-export function contactToRow(
-  c: Contact,
-  config?: CRMConfig,
-): Record<string, unknown> {
+export function contactToRow(c: Contact): Record<string, unknown> {
   const emails: string[] = safeJSON(c.emails)
   const phones: string[] = safeJSON(c.phones)
   const companies: string[] = safeJSON(c.companies)
   const tags: string[] = safeJSON(c.tags)
   const custom: Record<string, unknown> = safeJSON(c.custom_fields)
-  const displayPhones = phones.map((p) =>
-    formatPhone(
-      p,
-      config?.phone?.display || 'international',
-      config?.phone?.default_country,
-    ),
-  )
   return {
     id: c.id,
     name: c.name,
     emails,
     phones,
-    _display_phones: displayPhones,
     companies,
     linkedin: c.linkedin || null,
     x: c.x || null,
@@ -187,10 +221,7 @@ export function contactToRow(
   }
 }
 
-export function companyToRow(
-  c: Company,
-  _config?: CRMConfig,
-): Record<string, unknown> {
+export function companyToRow(c: Company): Record<string, unknown> {
   return {
     id: c.id,
     name: c.name,
@@ -203,10 +234,7 @@ export function companyToRow(
   }
 }
 
-export function dealToRow(
-  d: Deal,
-  _config?: CRMConfig,
-): Record<string, unknown> {
+export function dealToRow(d: Deal): Record<string, unknown> {
   return {
     id: d.id,
     title: d.title,

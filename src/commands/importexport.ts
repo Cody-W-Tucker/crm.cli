@@ -341,36 +341,32 @@ export function registerImportExportCommands(program: Command) {
   exp.command('contacts').action(async () => {
     const { db, config, fmt } = await getCtx()
     const rows = (await db.select().from(schema.contacts)).map((c) =>
-      contactToRow(c, config),
+      contactToRow(c),
     )
     console.log(formatOutput(rows, fmt, config))
   })
   exp.command('companies').action(async () => {
     const { db, config, fmt } = await getCtx()
     const rows = (await db.select().from(schema.companies)).map((c) =>
-      companyToRow(c, config),
+      companyToRow(c),
     )
     console.log(formatOutput(rows, fmt, config))
   })
   exp.command('deals').action(async () => {
     const { db, config, fmt } = await getCtx()
-    const rows = (await db.select().from(schema.deals)).map((d) =>
-      dealToRow(d, config),
-    )
+    const rows = (await db.select().from(schema.deals)).map((d) => dealToRow(d))
     console.log(formatOutput(rows, fmt, config))
   })
   exp.command('all').action(async () => {
     const { db, config, fmt } = await getCtx()
     const data = {
       contacts: (await db.select().from(schema.contacts)).map((c) =>
-        contactToRow(c, config),
+        contactToRow(c),
       ),
       companies: (await db.select().from(schema.companies)).map((c) =>
-        companyToRow(c, config),
+        companyToRow(c),
       ),
-      deals: (await db.select().from(schema.deals)).map((d) =>
-        dealToRow(d, config),
-      ),
+      deals: (await db.select().from(schema.deals)).map((d) => dealToRow(d)),
       activities: (await db.select().from(schema.activities)).map((a) =>
         activityToRow(a),
       ),

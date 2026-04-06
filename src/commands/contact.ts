@@ -92,7 +92,7 @@ export function registerContactCommands(program: Command) {
       }
       const companies: string[] = []
       for (const c of opts.company) {
-        companies.push(await getOrCreateCompanyId(db, c, config))
+        companies.push(await getOrCreateCompanyId(db, c))
       }
       const custom = parseKV(opts.set)
       if (
@@ -165,7 +165,7 @@ export function registerContactCommands(program: Command) {
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
       let rows = (await db.select().from(schema.contacts)).map((c) =>
-        contactToRow(c, config),
+        contactToRow(c),
       )
       if (opts.tag) {
         rows = rows.filter((c) =>
@@ -288,7 +288,7 @@ export function registerContactCommands(program: Command) {
           : phones.filter((v) => v !== p)
       }
       for (const co of opts.addCompany) {
-        const coId = await getOrCreateCompanyId(db, co, config)
+        const coId = await getOrCreateCompanyId(db, co)
         if (!companies.includes(coId)) {
           companies.push(coId)
         }

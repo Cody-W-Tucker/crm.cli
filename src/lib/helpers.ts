@@ -101,10 +101,9 @@ export function parseKV(arr: string[]): Record<string, unknown> {
 export async function getOrCreateCompanyId(
   db: DB,
   rawRef: string,
-  config: CRMConfig,
 ): Promise<string> {
   const ref = rawRef.trim()
-  const co = await resolveCompanyForLink(db, ref, config)
+  const co = await resolveCompanyForLink(db, ref)
   if (co) {
     return co.id
   }
@@ -292,7 +291,7 @@ export async function contactDetail(
   c: Contact,
   config: CRMConfig,
 ): Promise<Record<string, unknown>> {
-  const row = contactToRow(c, config)
+  const row = contactToRow(c)
   const phones: string[] = safeJSON(c.phones)
   row._display_phones = phones.map((p) =>
     formatPhone(p, config.phone.display, config.phone.default_country),
@@ -318,7 +317,7 @@ export async function companyDetail(
   co: Company,
   config: CRMConfig,
 ): Promise<Record<string, unknown>> {
-  const row = companyToRow(co, config)
+  const row = companyToRow(co)
   const phones: string[] = safeJSON(co.phones)
   row._display_phones = phones.map((p) =>
     formatPhone(p, config.phone.display, config.phone.default_country),
@@ -346,9 +345,8 @@ export async function companyDetail(
 export async function dealDetail(
   db: DB,
   d: Deal,
-  config: CRMConfig,
 ): Promise<Record<string, unknown>> {
-  const row = dealToRow(d, config)
+  const row = dealToRow(d)
   const contactIds: string[] = safeJSON(d.contacts)
   const contactPromises = contactIds.map(async (cid) => {
     const results = await db

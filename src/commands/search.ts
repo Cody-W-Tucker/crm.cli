@@ -1,7 +1,6 @@
 import type { Command } from 'commander'
 import { eq, sql } from 'drizzle-orm'
 
-import type { CRMConfig } from '../config'
 import type { DB } from '../db'
 import { rebuildSearchIndex } from '../db'
 import * as schema from '../drizzle-schema'
@@ -32,12 +31,7 @@ export function registerSearchCommands(program: Command) {
           if (opts.type && fr.entity_type !== opts.type) {
             continue
           }
-          const entity = await lookupEntity(
-            db,
-            fr.entity_type,
-            fr.entity_id,
-            config,
-          )
+          const entity = await lookupEntity(db, fr.entity_type, fr.entity_id)
           if (entity) {
             results.push(entity)
           }
@@ -51,12 +45,7 @@ export function registerSearchCommands(program: Command) {
           if (opts.type && fr.entity_type !== opts.type) {
             continue
           }
-          const entity = await lookupEntity(
-            db,
-            fr.entity_type,
-            fr.entity_id,
-            config,
-          )
+          const entity = await lookupEntity(db, fr.entity_type, fr.entity_id)
           if (entity) {
             results.push(entity)
           }
@@ -135,7 +124,7 @@ export function registerSearchCommands(program: Command) {
         : config.mount.search_limit
       limited = limited.slice(0, maxResults)
       const resultPromises = limited.map((r) =>
-        lookupEntity(db, r.entity_type, r.entity_id, config),
+        lookupEntity(db, r.entity_type, r.entity_id),
       )
       const results = (await Promise.all(resultPromises)).filter(
         Boolean,
@@ -193,7 +182,6 @@ async function lookupEntity(
   db: DB,
   entityType: string,
   id: string,
-  config: CRMConfig,
 ): Promise<Record<string, unknown> | null> {
   if (entityType === 'contact') {
     const results = await db
@@ -204,7 +192,7 @@ async function lookupEntity(
     if (!c) {
       return null
     }
-    return { type: 'contact', ...contactToRow(c, config) }
+    return { type: 'contact', ...contactToRow(c) }
   }
   if (entityType === 'company') {
     const results = await db
@@ -215,7 +203,7 @@ async function lookupEntity(
     if (!c) {
       return null
     }
-    return { type: 'company', ...companyToRow(c, config) }
+    return { type: 'company', ...companyToRow(c) }
   }
   if (entityType === 'deal') {
     const results = await db
@@ -226,7 +214,7 @@ async function lookupEntity(
     if (!d) {
       return null
     }
-    return { type: 'deal', ...dealToRow(d, config) }
+    return { type: 'deal', ...dealToRow(d) }
   }
   if (entityType === 'activity') {
     const results = await db

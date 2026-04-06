@@ -238,7 +238,7 @@ export async function computeWon(db: DB, config: CRMConfig) {
     .where(eq(schema.deals.stage, wonStage))
   return Promise.all(
     deals.map(async (d) => {
-      const row: Record<string, unknown> = dealToRow(d, config)
+      const row: Record<string, unknown> = dealToRow(d)
       row.notes = await extractStageNotes(db, d.id, wonStage)
       return row
     }),
@@ -253,7 +253,7 @@ export async function computeLost(db: DB, config: CRMConfig) {
     .where(eq(schema.deals.stage, lostStage))
   return Promise.all(
     deals.map(async (d) => {
-      const row: Record<string, unknown> = dealToRow(d, config)
+      const row: Record<string, unknown> = dealToRow(d)
       row.notes = await extractStageNotes(db, d.id, lostStage)
       return row
     }),

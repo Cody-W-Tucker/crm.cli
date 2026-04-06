@@ -83,7 +83,7 @@ export function registerDealCommands(program: Command) {
       }
       let companyId: string | null = null
       if (opts.company) {
-        const co = await resolveCompanyForLink(db, opts.company, config)
+        const co = await resolveCompanyForLink(db, opts.company)
         if (co) {
           companyId = co.id
         } else {
@@ -91,7 +91,7 @@ export function registerDealCommands(program: Command) {
           if (opts.company.includes('.')) {
             die(`Error: company not found: ${opts.company}`)
           }
-          companyId = await getOrCreateCompanyId(db, opts.company, config)
+          companyId = await getOrCreateCompanyId(db, opts.company)
         }
       }
       const custom = parseKV(opts.set)
@@ -163,9 +163,7 @@ export function registerDealCommands(program: Command) {
     .option('--offset <n>')
     .action(async (opts) => {
       const { db, config, fmt } = await getCtx()
-      let rows = (await db.select().from(schema.deals)).map((d) =>
-        dealToRow(d, config),
-      )
+      let rows = (await db.select().from(schema.deals)).map((d) => dealToRow(d))
       if (opts.stage) {
         rows = rows.filter((d) => d.stage === opts.stage)
       }
@@ -232,12 +230,12 @@ export function registerDealCommands(program: Command) {
     .command('show')
     .argument('<ref>')
     .action(async (ref) => {
-      const { db, config, fmt } = await getCtx()
+      const { db, fmt } = await getCtx()
       const d = await resolveDeal(db, ref)
       if (!d) {
         die(`Error: deal not found: ${ref}`)
       }
-      showEntity(await dealDetail(db, d, config), fmt)
+      showEntity(await dealDetail(db, d), fmt)
     })
 
   cmd
@@ -281,7 +279,7 @@ export function registerDealCommands(program: Command) {
           : Number(opts.probability)
       let companyId = d.company
       if (opts.company) {
-        companyId = await getOrCreateCompanyId(db, opts.company, config)
+        companyId = await getOrCreateCompanyId(db, opts.company)
       }
       let contacts: string[] = safeJSON(d.contacts)
       let tags: string[] = safeJSON(d.tags)

@@ -20,7 +20,7 @@ export function registerDupesCommand(program: Command) {
     .option('--threshold <n>', 'Similarity threshold 0-1', '0.3')
     .option('--limit <n>', 'Max results')
     .action(async (opts) => {
-      const { db, config, fmt } = await getCtx()
+      const { db, fmt } = await getCtx()
       const threshold = Number(opts.threshold)
       let results: DupeResult[] = []
 
@@ -32,8 +32,8 @@ export function registerDupesCommand(program: Command) {
             const score = dupeScore(reasons)
             if (score >= threshold) {
               results.push({
-                left: contactToRow(contacts[i], config),
-                right: contactToRow(contacts[j], config),
+                left: contactToRow(contacts[i]),
+                right: contactToRow(contacts[j]),
                 reasons,
                 score,
               })
@@ -50,8 +50,8 @@ export function registerDupesCommand(program: Command) {
             const score = dupeScore(reasons)
             if (score >= threshold) {
               results.push({
-                left: companyToRow(companies[i], config),
-                right: companyToRow(companies[j], config),
+                left: companyToRow(companies[i]),
+                right: companyToRow(companies[j]),
                 reasons,
                 score,
               })

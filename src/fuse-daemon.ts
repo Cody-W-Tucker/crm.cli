@@ -1150,7 +1150,7 @@ async function writeContact(
       } else if (typeof c === 'string' && c.startsWith('co_')) {
         resolved.push(c)
       } else if (typeof c === 'string') {
-        const coId = await getOrCreateCompanyId(db, c, config)
+        const coId = await getOrCreateCompanyId(db, c)
         resolved.push(coId)
       }
     }
