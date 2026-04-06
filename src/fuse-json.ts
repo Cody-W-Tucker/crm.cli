@@ -40,7 +40,7 @@ activities/                  → One JSON file per activity (note, email, call, 
   _by-type/                  → Activities grouped by type
 
 reports/                     → Pre-computed analytics (pipeline, forecast, velocity, stale, won, lost, conversion)
-search/                      → Write a query file, read back JSON results
+search/                      → Read search/<query>.json to search (filename is the query)
 pipeline.json                → Pipeline stage counts and values
 tags.json                    → All tags with usage counts
 

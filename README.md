@@ -1000,6 +1000,7 @@ The mount point stays live — changes made via the CLI or filesystem are reflec
 
 ```
 ~/crm/
+├── llm.txt                                # agent instructions (read this first)
 ├── contacts/
 │   ├── ct_01J8Z...jane-doe.json           # full contact as JSON
 │   ├── ct_02K9A...john-smith.json
@@ -1187,9 +1188,12 @@ echo '{"name": "X", "emails": "wrong"}' > ~/crm/contacts/new.json  # type mismat
 
 ### AI Agent Usage
 
-The filesystem is designed for agents that navigate via `ls`, `cat`, and `find`. An agent exploring CRM data might:
+The filesystem is designed for agents that navigate via `ls`, `cat`, and `find`. A `llm.txt` file at the root describes the filesystem structure and usage — agents should read this first. An agent exploring CRM data might:
 
 ```
+Agent: Let me understand this filesystem.
+> cat ~/crm/llm.txt
+
 Agent: Let me check the pipeline.
 > cat ~/crm/pipeline.json
 
