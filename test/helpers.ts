@@ -9,7 +9,7 @@ const CRM_BIN = join(import.meta.dir, '..', 'src', 'cli.ts')
 
 const TEST_CONFIG = `[phone]
 default_country = "US"
-display = "international"
+display = "national"
 
 [pipeline]
 stages = ["lead", "qualified", "proposal", "negotiation", "closed-won", "closed-lost"]

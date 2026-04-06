@@ -43,7 +43,7 @@ describe('contact add', () => {
     const show = ctx.runOK('contact', 'show', id)
     expect(show).toContain('Jane Doe')
     expect(show).toContain('jane@acme.com')
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
     expect(show).toContain('Acme Corp')
     expect(show).toContain('Acme Ventures')
     expect(show).toContain('janedoe') // linkedin + x handles
@@ -141,7 +141,7 @@ describe('contact add', () => {
       .trim()
 
     const show = ctx.runOK('contact', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
     expect(show).toContain('+44 20 7946 0958')
   })
 
@@ -877,7 +877,7 @@ describe('contact edit', () => {
     ctx.runOK('contact', 'edit', id, '--add-phone', '+44-20-7946-0958')
 
     const show = ctx.runOK('contact', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
     expect(show).toContain('+44 20 7946 0958')
   })
 
@@ -898,8 +898,8 @@ describe('contact edit', () => {
     ctx.runOK('contact', 'edit', id, '--rm-phone', '+1-310-555-9876')
 
     const show = ctx.runOK('contact', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
-    expect(show).not.toContain('+1 310 555 9876')
+    expect(show).toContain('(212) 555-1234')
+    expect(show).not.toContain('(310) 555-9876')
   })
 
   test('add company to existing contact', () => {
@@ -981,12 +981,22 @@ describe('contact phone normalization', () => {
     expect(contacts[0].phones[0]).toBe('+12125551234')
   })
 
-  test('display format is international by default', () => {
+  test('display format is national by default', () => {
     const ctx = createTestContext()
     ctx.runOK('contact', 'add', '--name', 'Jane', '--phone', '+12125551234')
 
     const show = ctx.runOK('contact', 'show', '+12125551234')
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
+  })
+
+  test('foreign numbers show international format even in national mode', () => {
+    const ctx = createTestContext()
+    // default_country is US in test config — a UK number should show with +44
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--phone', '+442079460958')
+
+    const show = ctx.runOK('contact', 'show', '+442079460958')
+    expect(show).toContain('+44 20 7946 0958')
+    expect(show).not.toContain('020 7946 0958')
   })
 
   test('duplicate detection across formats', () => {

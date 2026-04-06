@@ -81,7 +81,7 @@ describe('company add', () => {
       .trim()
 
     const show = ctx.runOK('company', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
     expect(show).toContain('+44 20 7946 0958')
   })
 
@@ -280,7 +280,7 @@ describe('company edit', () => {
     ctx.runOK('company', 'edit', id, '--add-phone', '+44-20-7946-0958')
 
     const show = ctx.runOK('company', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
+    expect(show).toContain('(212) 555-1234')
     expect(show).toContain('+44 20 7946 0958')
   })
 
@@ -301,8 +301,8 @@ describe('company edit', () => {
     ctx.runOK('company', 'edit', id, '--rm-phone', '+1-310-555-9876')
 
     const show = ctx.runOK('company', 'show', id)
-    expect(show).toContain('+1 212 555 1234')
-    expect(show).not.toContain('+1 310 555 9876')
+    expect(show).toContain('(212) 555-1234')
+    expect(show).not.toContain('(310) 555-9876')
   })
 })
 

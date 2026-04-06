@@ -38,7 +38,7 @@ export function normalizePhone(input: string, defaultCountry?: string): string {
 export function formatPhone(
   e164: string,
   display: string,
-  _defaultCountry?: string,
+  defaultCountry?: string,
 ): string {
   const phone = parsePhoneNumberFromString(e164)
   if (!phone) {
@@ -48,6 +48,10 @@ export function formatPhone(
     case 'e164':
       return phone.format('E.164')
     case 'national':
+      // Foreign numbers get international format so the country code is visible
+      if (defaultCountry && phone.country !== defaultCountry.toUpperCase()) {
+        return phone.formatInternational()
+      }
       return phone.formatNational()
     default:
       return phone.formatInternational()

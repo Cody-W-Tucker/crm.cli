@@ -690,6 +690,26 @@ describe('config resolution', () => {
   })
 })
 
+describe('config: env var overrides', () => {
+  test('CRM_PHONE_DISPLAY env var overrides config file', () => {
+    const ctx = createTestContext()
+    ctx.runOK('contact', 'add', '--name', 'Jane', '--phone', '+12125551234')
+
+    // Default test config uses national display
+    const national = ctx.runOK('contact', 'show', '+12125551234')
+    expect(national).toContain('(212) 555-1234')
+
+    // Env var override to international
+    const intl = ctx.runWithEnv(
+      { CRM_PHONE_DISPLAY: 'international' },
+      'contact',
+      'show',
+      '+12125551234',
+    )
+    expect(intl.stdout).toContain('+1 212 555 1234')
+  })
+})
+
 describe('config: malformed TOML warning', () => {
   test('prints warning on bad TOML but still works', () => {
     const ctx = createTestContext()
