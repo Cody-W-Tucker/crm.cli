@@ -21,8 +21,8 @@ function writeFile(path: string, content: string) {
 }
 
 /**
- * FUSE tests mount the CRM as a virtual filesystem via `crm mount` and
- * test read/write operations using standard file system calls.
+ * Mount tests — mount the CRM as a virtual filesystem via `crm mount`
+ * (NFS on macOS, FUSE on Linux) and test read/write via standard fs calls.
  */
 
 const canMount =
@@ -145,7 +145,7 @@ function unmountIfNotShared(ctx: FuseTestContext) {
 
 function skipIfNoFuse(ctx: FuseTestContext) {
   if (!ctx.mounted) {
-    console.warn('FUSE not available — skipping test')
+    console.warn('mount not available — skipping test')
     return true
   }
   return false
@@ -164,7 +164,7 @@ function readJSON<T = Record<string, unknown>>(path: string): T {
 }
 
 // ---------------------------------------------------------------------------
-// Full FUSE scenario: one sequential flow, data accumulates naturally
+// Full scenario: one sequential flow, data accumulates naturally
 // ---------------------------------------------------------------------------
 
 describe('fuse scenarios', () => {
@@ -1054,7 +1054,7 @@ describe('fuse: readonly mode', () => {
       return
     }
     if (!canMount) {
-      console.warn('FUSE not available — skipping test')
+      console.warn('mount not available — skipping test')
       return
     }
     const ctx = createTestContext() as FuseTestContext
@@ -1067,7 +1067,7 @@ describe('fuse: readonly mode', () => {
     // Mount read-only via CLI
     const result = ctx.run('mount', '--readonly', ctx.mountPoint)
     if (result.exitCode !== 0) {
-      console.warn('FUSE mount failed — skipping test')
+      console.warn('mount failed — skipping test')
       return
     }
 
@@ -1088,7 +1088,7 @@ describe('fuse: readonly mode', () => {
     }
     ctx.mounted = ready
     if (!ready) {
-      console.warn('FUSE mount failed — skipping test')
+      console.warn('mount failed — skipping test')
       return
     }
 
