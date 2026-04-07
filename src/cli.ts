@@ -1,9 +1,5 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
 import { Command } from 'commander'
 
 import {
@@ -22,13 +18,16 @@ import { registerTagCommands } from './commands/tag'
 import { startDaemon } from './fuse-daemon'
 import { cleanArgv } from './lib/helpers'
 
-const __dirname = dirname(fileURLToPath(import.meta.url))
-const pkg = JSON.parse(
-  readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'),
-)
+// Injected at build time via --define; falls back to package.json for dev/test
+declare const __PKG_VERSION__: string | undefined
+const version =
+  typeof __PKG_VERSION__ === 'undefined'
+    ? (await import('../package.json', { with: { type: 'json' } })).default
+        .version
+    : __PKG_VERSION__
 
 const program = new Command()
-program.name('crm').description('Headless CLI-first CRM').version(pkg.version)
+program.name('crm').description('Headless CLI-first CRM').version(version)
 program.exitOverride()
 
 registerContactCommands(program)
