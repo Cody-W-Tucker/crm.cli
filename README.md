@@ -2,7 +2,7 @@
 
 ![crm.cli — Your CRM is a filesystem](assets/cover.png)
 
-**A headless, CLI-first CRM for developers who do sales.** Contacts, deals, and pipeline in a single SQLite file — queryable from your terminal, composable with Unix tools, and mountable as a virtual filesystem so any tool that reads files (Claude Code, Codex, grep, jq, vim) has full CRM access without any integration.
+**A headless, CLI-first CRM for AI native companies.** Contacts, deals, and pipeline in a single SQLite file — queryable from your terminal, composable with Unix tools, and mountable as a virtual filesystem so any tool that reads files (Claude Code, Codex, grep, jq, vim) has full CRM access without any integration.
 
 No server. No Docker. No accounts. No GUI. Just `npm install -g @dzhng/crm.cli` and go.
 
