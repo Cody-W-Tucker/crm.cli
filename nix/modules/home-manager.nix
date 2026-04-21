@@ -9,10 +9,13 @@
 let
   cfg = config.programs."crm-cli";
   tomlFormat = pkgs.formats.toml { };
+  mountPath = cfg.settings.mount.default_path or null;
 in
 {
   options.programs."crm-cli" = {
     enable = lib.mkEnableOption "crm-cli";
+
+    autoMount = lib.mkEnableOption "mounting crm-cli at login";
 
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
@@ -61,9 +64,34 @@ in
         assertion = cfg.package != null;
         message = "programs.crm-cli.package is null for ${pkgs.system}; provide a package explicitly.";
       }
+      {
+        assertion = !(cfg.autoMount && mountPath == null);
+        message = ''programs."crm-cli".autoMount requires settings.mount.default_path to be set.'';
+      }
+      {
+        assertion = !(cfg.autoMount && lib.hasPrefix "~/" mountPath);
+        message = ''programs."crm-cli".autoMount requires settings.mount.default_path to be an absolute path; `~` is not expanded by crm-cli.'';
+      }
     ];
 
     home.packages = [ cfg.package ];
     home.file.".crm/config.toml".source = tomlFormat.generate "crm-cli-config.toml" cfg.settings;
+
+    systemd.user.services.crm-mount = lib.mkIf cfg.autoMount {
+      Unit = {
+        Description = "Mount crm-cli filesystem";
+      };
+
+      Service = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        ExecStart = "${lib.getExe cfg.package} mount";
+        ExecStop = "${lib.getExe cfg.package} unmount";
+      };
+
+      Install = {
+        WantedBy = [ "default.target" ];
+      };
+    };
   };
 }
