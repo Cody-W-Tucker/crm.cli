@@ -142,7 +142,7 @@ function detectCountry(): string | undefined {
 function createDefaultConfig(configPath: string): void {
   const country = detectCountry() || 'US'
   const content = `# CRM CLI configuration
-# Docs: https://github.com/dzhng/crm.cli#configuration
+# Docs: https://github.com/Cody-W-Tucker/crm.cli#configuration
 
 [phone]
 default_country = "${country}"

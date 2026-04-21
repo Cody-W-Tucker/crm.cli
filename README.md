@@ -48,7 +48,7 @@ npm install -g @dzhng/crm.cli
 # or: bun install -g @dzhng/crm.cli
 
 # Or install the compiled binary
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ```
 
 ### Install as an AI agent skill
@@ -57,7 +57,7 @@ Point your agent at the [skills folder](./skills) to give it full CRM knowledge 
 
 ```bash
 # Claude Code / Duet — install the skill from GitHub
-claude skills add https://github.com/dzhng/crm.cli/tree/main/skills
+claude skills add https://github.com/Cody-W-Tucker/crm.cli/tree/main/skills
 
 # Or copy skills/SKILL.md into your agent's skills directory
 cp skills/SKILL.md ~/.your-agent/skills/crm-cli/SKILL.md
@@ -1288,7 +1288,7 @@ npm install -g @dzhng/crm.cli
 
 ### Compiled Binary
 
-Pre-built binaries are available on [GitHub Releases](https://github.com/dzhng/crm.cli/releases), compiled via `bun build --compile` for:
+Pre-built binaries are available on [GitHub Releases](https://github.com/Cody-W-Tucker/crm.cli/releases), compiled via `bun build --compile` for:
 
 - Linux x64
 - Linux arm64
@@ -1297,7 +1297,7 @@ Pre-built binaries are available on [GitHub Releases](https://github.com/dzhng/c
 
 ```bash
 # Download and install the latest release
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ```
 
 ### Install Script
@@ -1312,7 +1312,7 @@ The install script (`install.sh`) handles:
    - macOS: `macfuse` via Homebrew
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ```
 
 ### CI/CD

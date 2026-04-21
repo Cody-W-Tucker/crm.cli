@@ -1,7 +1,7 @@
 ---
 name: crm-cli
 description: Manage contacts, companies, deals, and pipeline with crm.cli — a headless CLI-first CRM backed by SQLite with a virtual filesystem interface
-install: curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+install: curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ---
 
 # crm.cli
@@ -11,7 +11,7 @@ A headless, CLI-first CRM. Contacts, deals, and pipeline in a single SQLite file
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/dzhng/crm.cli/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ```
 
 This downloads the precompiled binary to `~/.local/bin` and installs mount dependencies (FUSE on Linux, Rust toolchain on macOS for NFS).

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="dzhng/crm.cli"
+REPO="Cody-W-Tucker/crm.cli"
 INSTALL_DIR="${CRM_INSTALL_DIR:-$HOME/.local/bin}"
 
 usage() {

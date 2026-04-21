@@ -68,7 +68,8 @@ async function mountDarwin(
   },
   _opts: { readonly?: boolean },
 ) {
-  const nfsHelperPath = join(homedir(), '.crm', 'bin', 'crm-nfs')
+  const nfsHelperPath =
+    process.env.CRM_NFS_HELPER || join(homedir(), '.crm', 'bin', 'crm-nfs')
 
   if (!existsSync(nfsHelperPath)) {
     // Auto-compile the Rust NFS server
@@ -241,7 +242,8 @@ async function mountLinux(
   },
   opts: { readonly?: boolean },
 ) {
-  const helperPath = join(homedir(), '.crm', 'bin', 'crm-fuse')
+  const helperPath =
+    process.env.CRM_FUSE_HELPER || join(homedir(), '.crm', 'bin', 'crm-fuse')
 
   if (!existsSync(helperPath)) {
     const srcPath = join(import.meta.dir, '..', 'fuse-helper.c')
@@ -374,13 +376,20 @@ async function unmountDarwin(mp: string) {
 }
 
 function unmountLinux(mp: string) {
+  const fusermount = process.env.CRM_FUSERMOUNT || 'fusermount3'
+
   // Unmount first so the kernel cleanly tears down the FUSE session — the
   // helper receives the destroy callback and exits naturally. Both orderings
   // produce identical results on Linux (empirically verified), but unmount-
   // first is the canonical FUSE teardown sequence.
-  const result = spawnSync('fusermount', ['-u', mp], {
+  let result = spawnSync(fusermount, ['-u', mp], {
     stdio: ['pipe', 'pipe', 'pipe'],
   })
+  if (result.status !== 0 && fusermount !== 'fusermount') {
+    result = spawnSync('fusermount', ['-u', mp], {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+  }
   if (result.status !== 0) {
     spawnSync('umount', [mp], { stdio: ['pipe', 'pipe', 'pipe'] })
   }
