@@ -51,6 +51,38 @@ npm install -g @dzhng/crm.cli
 curl -fsSL https://raw.githubusercontent.com/Cody-W-Tucker/crm.cli/main/install.sh | sh
 ```
 
+### Install with Nix
+
+```bash
+# Build the package
+nix build .#crm-cli
+
+# Run directly from the flake
+nix run . -- --help
+```
+
+Home Manager module:
+
+```nix
+{
+  imports = [
+    inputs.crm-cli.homeManagerModules.default
+  ];
+
+  programs."crm-cli" = {
+    enable = true;
+    settings = {
+      mount.default_path = "~/crm";
+      mount.readonly = false;
+      mount.max_recent_activity = 20;
+      mount.search_limit = 50;
+    };
+  };
+}
+```
+
+This writes `~/.crm/config.toml` from Nix, including the default mount location used by `crm mount`.
+
 ### Install as an AI agent skill
 
 Point your agent at the [skills folder](./skills) to give it full CRM knowledge — install instructions, every command, the filesystem interface, and tips for agents:
