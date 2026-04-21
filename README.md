@@ -146,13 +146,15 @@ display = "international" # international | national | e164
 # pre-deal-stage-change = "echo 'stage changing'"
 
 [mount]
-default_path = "~/crm"          # where `crm mount` mounts by default
+default_path = "/home/you/crm"  # where `crm mount` mounts by default
 readonly = false                 # set true to prevent writes via FUSE
 max_recent_activity = 10         # activities shown per entity in FUSE
 search_limit = 20                # max results from search/find
 
 EOF
 ```
+
+Use an absolute path for `mount.default_path`. `crm mount` currently uses this value as-is and does not expand `~`.
 
 Settings in a closer `crm.toml` override the global config. The `--config` flag overrides everything.
 
