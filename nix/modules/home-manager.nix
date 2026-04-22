@@ -20,11 +20,11 @@ in
     package = lib.mkOption {
       type = lib.types.nullOr lib.types.package;
       default =
-        if builtins.hasAttr "crm-cli" self.packages.${pkgs.system} then
-          builtins.getAttr "crm-cli" self.packages.${pkgs.system}
+        if builtins.hasAttr "crm-cli" self.packages.${pkgs.stdenv.hostPlatform.system} then
+          builtins.getAttr "crm-cli" self.packages.${pkgs.stdenv.hostPlatform.system}
         else
           null;
-      defaultText = lib.literalExpression "self.packages.${pkgs.system}.crm-cli";
+      defaultText = lib.literalExpression "self.packages.${pkgs.stdenv.hostPlatform.system}.crm-cli";
       description = "The crm-cli package to install.";
     };
 
@@ -62,7 +62,7 @@ in
     assertions = [
       {
         assertion = cfg.package != null;
-        message = "programs.crm-cli.package is null for ${pkgs.system}; provide a package explicitly.";
+        message = "programs.crm-cli.package is null for ${pkgs.stdenv.hostPlatform.system}; provide a package explicitly.";
       }
       {
         assertion = !(cfg.autoMount && mountPath == null);
